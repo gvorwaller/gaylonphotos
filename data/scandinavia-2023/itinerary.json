@@ -1,0 +1,20 @@
+{
+  "trip": {
+    "name": "Scandinavia 2023",
+    "description": "Our Scandinavian adventure",
+    "startDate": null,
+    "endDate": null
+  },
+  "stops": [
+    {
+      "id": 1,
+      "city": "City Name",
+      "country": "Country",
+      "lat": 0,
+      "lng": 0,
+      "arrivalDate": null,
+      "departureDate": null,
+      "notes": "Description of this stop"
+    }
+  ]
+}

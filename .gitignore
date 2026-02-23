@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# SvelteKit
+.svelte-kit/
+build/
+
+# Generated data
+data/admin.json
+
+# Source photos (large binaries — don't commit)
+photos/
+
+# Environment
+.env
+.env.local
+.env.production
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE / tooling
+.vscode/
+.idea/
+.todos/
+.sidecar/
