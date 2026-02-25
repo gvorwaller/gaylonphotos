@@ -9,7 +9,7 @@
 		currentUser.set(data.user);
 	});
 
-	let isAdmin = $derived($page.url.pathname.startsWith('/admin'));
+	let isAdmin = $derived($page.url.pathname === '/admin' || $page.url.pathname.startsWith('/admin/'));
 </script>
 
 {#if !isAdmin}

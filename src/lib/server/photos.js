@@ -229,11 +229,17 @@ export async function processAndUpload(collectionSlug, fileBuffer, originalFilen
 	const uploadedKeys = [];
 
 	try {
-		const [displayResult, thumbResult] = await Promise.all([
+		const [displayUpload, thumbUpload] = await Promise.allSettled([
 			uploadFile(displayKey, displayBuffer, 'image/jpeg'),
 			uploadFile(thumbKey, thumbBuffer, 'image/jpeg')
 		]);
-		uploadedKeys.push(displayKey, thumbKey);
+		if (displayUpload.status === 'fulfilled') uploadedKeys.push(displayKey);
+		if (thumbUpload.status === 'fulfilled') uploadedKeys.push(thumbKey);
+		if (displayUpload.status === 'rejected') throw displayUpload.reason;
+		if (thumbUpload.status === 'rejected') throw thumbUpload.reason;
+
+		const displayResult = displayUpload.value;
+		const thumbResult = thumbUpload.value;
 
 		// 5. Build complete photo object
 		const photo = {
