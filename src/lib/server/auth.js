@@ -100,16 +100,18 @@ export function destroySession(token) {
  * @returns {Promise<{token: string}>}
  */
 export async function createAdmin(username, password) {
-	if (_adminExists) throw new Error(ADMIN_EXISTS_ERROR);
+	// Fast path: skip expensive bcrypt if admin already exists.
+	// createJsonIfNotExists is the true race guard (holds file lock).
+	if (await adminExists()) throw new Error(ADMIN_EXISTS_ERROR);
 	const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
 	await ensureDir('data');
 
 	try {
 		await createJsonIfNotExists(ADMIN_FILE, { username, passwordHash });
-		_adminExists = true;
+		expireAdminCache();
 	} catch (err) {
 		if (err.message === 'FILE_EXISTS') {
-			_adminExists = true;
+			expireAdminCache();
 			throw new Error(ADMIN_EXISTS_ERROR);
 		}
 		throw err;
@@ -118,18 +120,24 @@ export async function createAdmin(username, password) {
 	return createSession(username);
 }
 
-/** Cached admin existence flag — once true, never rechecked from disk. */
-let _adminExists = false;
+/** TTL cache for adminExists — avoids disk read on every SSR render. Resets on createAdmin. */
+let _adminExistsCache = { value: false, expiresAt: 0 };
 
 export async function adminExists() {
-	if (_adminExists) return true;
+	if (_adminExistsCache.expiresAt > Date.now()) return _adminExistsCache.value;
 	try {
 		await readJson(ADMIN_FILE);
-		_adminExists = true;
+		_adminExistsCache = { value: true, expiresAt: Date.now() + 60_000 };
 		return true;
 	} catch {
+		_adminExistsCache = { value: false, expiresAt: Date.now() + 60_000 };
 		return false;
 	}
+}
+
+/** Expire the adminExists cache — forces a disk re-read on next call. */
+function expireAdminCache() {
+	_adminExistsCache.expiresAt = 0;
 }
 
 export const COOKIE_NAME = 'gp_session';

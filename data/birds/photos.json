@@ -8,8 +8,11 @@
       "description": "",
       "tags": [],
       "favorite": false,
-      "gps": null,
-      "gpsSource": null,
+      "gps": {
+        "lat": 30.45771639620535,
+        "lng": -81.41123711409274
+      },
+      "gpsSource": "manual",
       "date": "2025-06-12T12:12:52.000Z",
       "camera": "Panasonic DC-G9M2",
       "lens": "OLYMPUS M.300mm F4.0",
@@ -26,8 +29,11 @@
       "description": "",
       "tags": [],
       "favorite": false,
-      "gps": null,
-      "gpsSource": null,
+      "gps": {
+        "lat": 30.45771639620535,
+        "lng": -81.41123711409274
+      },
+      "gpsSource": "manual",
       "date": "2025-11-05T17:14:34.000Z",
       "camera": "Panasonic DC-G9M2",
       "lens": "OLYMPUS M.300mm F4.0",

@@ -1,9 +1,8 @@
-import { listCollections } from '$lib/server/collections.js';
 import { listPhotos } from '$lib/server/photos.js';
 
 /** @type {import('./$types').PageServerLoad} */
-export async function load() {
-	const collections = await listCollections();
+export async function load({ parent }) {
+	const { collections } = await parent();
 
 	// Load photos per collection in parallel — full list for counts, sliced for hero display
 	const photosByCollection = {};
