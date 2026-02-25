@@ -5,7 +5,7 @@
 	 */
 	import Map from '$lib/components/common/Map.svelte';
 
-	let { photos = [], apiKey = '' } = $props();
+	let { photos = [], apiKey = '', onboundschange = null } = $props();
 
 	// Simple hash → hue for species coloring
 	function speciesColor(species) {
@@ -37,6 +37,7 @@
 		center={{ lat: 35, lng: -95 }}
 		zoom={4}
 		{markers}
+		{onboundschange}
 	/>
 </div>
 

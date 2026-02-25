@@ -12,6 +12,8 @@
 	 *   apiKey: string — Google Maps API key
 	 *   onmapclick: ({ lat, lng }) => void
 	 *   onmarkerclick: ({ id }) => void
+	 *   onmapready: (map) => void
+	 *   onboundschange: (bounds) => void — fires on idle with { north, south, east, west }
 	 */
 
 	let {
@@ -23,7 +25,8 @@
 		apiKey = '',
 		onmapclick = null,
 		onmarkerclick = null,
-		onmapready = null
+		onmapready = null,
+		onboundschange = null
 	} = $props();
 
 	let mapContainer;
@@ -31,6 +34,21 @@
 	let googleMarkers = [];
 	let googlePolyline = null;
 	let apiLoaded = $state(false);
+	let initialFitDone = false; // Not reactive — one-shot flag read inside effect
+
+	/**
+	 * Creates a colored circle DOM element for AdvancedMarkerElement content.
+	 */
+	function createColoredMarkerElement(color) {
+		const div = document.createElement('div');
+		div.style.width = '16px';
+		div.style.height = '16px';
+		div.style.borderRadius = '50%';
+		div.style.backgroundColor = color;
+		div.style.border = '2px solid #fff';
+		div.style.boxShadow = '0 1px 3px rgba(0,0,0,0.4)';
+		return div;
+	}
 
 	// Load Google Maps API
 	$effect(() => {
@@ -69,6 +87,7 @@
 		map = new google.maps.Map(mapContainer, {
 			center,
 			zoom,
+			mapId: 'DEMO_MAP_ID',
 			mapTypeControl: true,
 			streetViewControl: false,
 			fullscreenControl: true
@@ -82,6 +101,20 @@
 			});
 		}
 
+		map.addListener('idle', () => {
+			if (!onboundschange) return;
+			const b = map.getBounds();
+			if (!b) return;
+			const ne = b.getNorthEast();
+			const sw = b.getSouthWest();
+			onboundschange({
+				north: ne.lat(),
+				south: sw.lat(),
+				east: ne.lng(),
+				west: sw.lng()
+			});
+		});
+
 		if (onmapready) {
 			onmapready(map);
 		}
@@ -93,30 +126,21 @@
 
 		// Clear old markers
 		for (const m of googleMarkers) {
-			m.setMap(null);
+			m.map = null;
 		}
 		googleMarkers = [];
 
 		// Add new markers
 		for (const m of markers) {
-			const marker = new google.maps.Marker({
+			const marker = new google.maps.marker.AdvancedMarkerElement({
 				position: { lat: m.lat, lng: m.lng },
 				map,
 				title: m.label || '',
-				...(m.color ? {
-					icon: {
-						path: google.maps.SymbolPath.CIRCLE,
-						scale: 8,
-						fillColor: m.color,
-						fillOpacity: 0.9,
-						strokeColor: '#fff',
-						strokeWeight: 2
-					}
-				} : {})
+				...(m.color ? { content: createColoredMarkerElement(m.color) } : {})
 			});
 
 			if (onmarkerclick) {
-				marker.addListener('click', () => {
+				marker.addEventListener('gmp-click', () => {
 					onmarkerclick({ id: m.id, lat: m.lat, lng: m.lng, label: m.label });
 				});
 			}
@@ -124,16 +148,26 @@
 			googleMarkers.push(marker);
 		}
 
-		// Auto-fit bounds if we have markers
-		if (markers.length > 1) {
-			const bounds = new google.maps.LatLngBounds();
-			for (const m of markers) {
-				bounds.extend({ lat: m.lat, lng: m.lng });
+		// Auto-fit bounds only on initial load (don't fight user panning)
+		if (!initialFitDone && markers.length > 0) {
+			initialFitDone = true;
+			if (markers.length > 1) {
+				const bounds = new google.maps.LatLngBounds();
+				for (const m of markers) {
+					bounds.extend({ lat: m.lat, lng: m.lng });
+				}
+				map.fitBounds(bounds, { padding: 50 });
+			} else {
+				map.setCenter({ lat: markers[0].lat, lng: markers[0].lng });
 			}
-			map.fitBounds(bounds, { padding: 50 });
-		} else if (markers.length === 1) {
-			map.setCenter({ lat: markers[0].lat, lng: markers[0].lng });
 		}
+
+		return () => {
+			for (const m of googleMarkers) {
+				m.map = null;
+			}
+			googleMarkers = [];
+		};
 	});
 
 	// Sync polyline
@@ -155,6 +189,27 @@
 				map
 			});
 		}
+
+		return () => {
+			if (googlePolyline) {
+				googlePolyline.setMap(null);
+				googlePolyline = null;
+			}
+		};
+	});
+
+	// Component cleanup — clear all map listeners on destroy
+	$effect(() => {
+		const currentMap = map;
+		return () => {
+			if (currentMap) google.maps.event.clearInstanceListeners(currentMap);
+			for (const m of googleMarkers) m.map = null;
+			googleMarkers = [];
+			if (googlePolyline) {
+				googlePolyline.setMap(null);
+				googlePolyline = null;
+			}
+		};
 	});
 </script>
 

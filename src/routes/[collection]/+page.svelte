@@ -9,18 +9,62 @@
 	let { data } = $props();
 
 	let filterSpecies = $state(null);
+	let mapBounds = $state(null);
+	let mapFilterActive = $state(false);
+	let prevSlug; // Plain let, not $state — must not trigger effect re-runs
 
-	// Reset species filter when navigating between collections
+	// Reset filters when navigating between collections (not on data invalidation)
 	$effect(() => {
-		data.collection.slug;
-		filterSpecies = null;
+		const slug = data.collection.slug;
+		if (prevSlug !== undefined && slug !== prevSlug) {
+			filterSpecies = null;
+			mapBounds = null;
+			mapFilterActive = false;
+		}
+		prevSlug = slug;
 	});
 
-	let displayPhotos = $derived(
-		filterSpecies
-			? data.photos.filter((p) => (p.species || 'Unknown') === filterSpecies)
-			: data.photos
+	let hasMapSection = $derived(
+		data.googleMapsApiKey && (
+			(data.collection.type === 'travel' && (data.itinerary?.stops?.length > 0 || data.photos.some((p) => p.gps))) ||
+			data.collection.type === 'wildlife' ||
+			data.collection.type === 'action'
+		)
 	);
+	let hasGpsPhotos = $derived(data.photos.some((p) => p.gps));
+
+	function handleBoundsChange(bounds) {
+		mapBounds = bounds;
+	}
+
+	function isInBounds(photo) {
+		if (!photo.gps || !mapBounds) return false;
+		const { lat, lng } = photo.gps;
+		const inLat = lat >= mapBounds.south && lat <= mapBounds.north;
+		if (!inLat) return false;
+		// Handle antimeridian wrap (west > east when viewport crosses 180th meridian)
+		if (mapBounds.west <= mapBounds.east) {
+			return lng >= mapBounds.west && lng <= mapBounds.east;
+		} else {
+			return lng >= mapBounds.west || lng <= mapBounds.east;
+		}
+	}
+
+	let displayPhotos = $derived.by(() => {
+		let filtered = data.photos;
+
+		// Apply species filter (wildlife)
+		if (filterSpecies) {
+			filtered = filtered.filter((p) => (p.species || 'Unknown') === filterSpecies);
+		}
+
+		// Apply map viewport filter
+		if (mapFilterActive && mapBounds) {
+			filtered = filtered.filter((p) => isInBounds(p));
+		}
+
+		return filtered;
+	});
 </script>
 
 <div class="container" style="padding-top: 40px;">
@@ -46,6 +90,7 @@
 					photos={data.photos}
 					stops={data.itinerary?.stops ?? []}
 					apiKey={data.googleMapsApiKey}
+					onboundschange={handleBoundsChange}
 				/>
 			</section>
 
@@ -58,7 +103,7 @@
 	{:else if data.collection.type === 'wildlife'}
 		<section style="margin-top: 32px;">
 			<h2 class="section-label">Sightings Map</h2>
-			<SightingMap photos={data.photos} apiKey={data.googleMapsApiKey} />
+			<SightingMap photos={data.photos} apiKey={data.googleMapsApiKey} onboundschange={handleBoundsChange} />
 		</section>
 
 		<section style="margin-top: 32px;">
@@ -72,20 +117,52 @@
 	{:else if data.collection.type === 'action'}
 		<section style="margin-top: 32px;">
 			<h2 class="section-label">Spots</h2>
-			<SpotGallery photos={data.photos} apiKey={data.googleMapsApiKey} />
+			<SpotGallery photos={data.photos} apiKey={data.googleMapsApiKey} onboundschange={handleBoundsChange} />
 		</section>
 	{/if}
 
 	<!-- Photo gallery -->
 	<section style="margin-top: 32px;">
-		<h2 class="section-label">
-			{#if filterSpecies}
-				{filterSpecies} ({displayPhotos.length})
-			{:else}
-				All Photos ({data.photos.length})
+		<div class="gallery-header">
+			<h2 class="section-label">
+				{#if filterSpecies && mapFilterActive && mapBounds}
+					{filterSpecies} in View ({displayPhotos.length})
+				{:else if filterSpecies}
+					{filterSpecies} ({displayPhotos.length})
+				{:else if mapFilterActive && mapBounds}
+					Photos in View ({displayPhotos.length} of {data.photos.length})
+				{:else}
+					All Photos ({data.photos.length})
+				{/if}
+			</h2>
+			{#if hasMapSection && hasGpsPhotos}
+				<button
+					class="btn btn-sm"
+					class:btn-primary={mapFilterActive}
+					class:btn-outline={!mapFilterActive}
+					aria-pressed={mapFilterActive}
+					onclick={() => mapFilterActive = !mapFilterActive}
+				>
+					{mapFilterActive ? 'Clear Map Filter' : 'Filter by Map'}
+				</button>
 			{/if}
-		</h2>
-		<Gallery photos={displayPhotos} columns={4} />
+		</div>
+		{#if mapFilterActive && mapBounds}
+			<p class="map-filter-hint">
+				{#if displayPhotos.length === 0}
+					No photos in the current map view — zoom out or pan to see more.
+				{:else}
+					Pan and zoom the map above to filter photos
+				{/if}
+			</p>
+		{:else if mapFilterActive}
+			<p class="map-filter-hint">Waiting for map...</p>
+		{:else if filterSpecies && displayPhotos.length === 0}
+			<p class="map-filter-hint">No photos found for {filterSpecies}.</p>
+		{/if}
+		{#if displayPhotos.length > 0 || (!mapFilterActive && !filterSpecies)}
+			<Gallery photos={displayPhotos} columns={4} />
+		{/if}
 	</section>
 </div>
 
@@ -113,5 +190,16 @@
 		color: var(--color-text-muted);
 		margin-top: 8px;
 		font-size: 0.95rem;
+	}
+	.gallery-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+	}
+	.map-filter-hint {
+		color: var(--color-text-muted);
+		font-size: 0.85rem;
+		margin: 4px 0 8px;
 	}
 </style>

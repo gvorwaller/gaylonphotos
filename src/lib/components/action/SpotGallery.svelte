@@ -4,8 +4,19 @@
 	 * Props: photos, apiKey
 	 */
 	import GoogleMap from '$lib/components/common/Map.svelte';
+	import Lightbox from '$lib/components/common/Lightbox.svelte';
 
-	let { photos = [], apiKey = '' } = $props();
+	let { photos = [], apiKey = '', onboundschange = null } = $props();
+
+	let lightboxPhoto = $state(null);
+
+	function openLightbox(photo) {
+		lightboxPhoto = photo;
+	}
+
+	function closeLightbox() {
+		lightboxPhoto = null;
+	}
 
 	let spotGroups = $derived.by(() => {
 		const groups = new Map();
@@ -22,6 +33,8 @@
 		}
 		return [...groups.values()].sort((a, b) => b.photos.length - a.photos.length);
 	});
+
+	let allPhotosFlat = $derived(spotGroups.flatMap((g) => g.photos));
 
 	let markers = $derived.by(() => {
 		return spotGroups
@@ -49,8 +62,9 @@
 				center={{ lat: 25, lng: -110 }}
 				zoom={4}
 				markers={markers}
-				onmarkerclick={({ label }) => {
-					const spot = label.replace(/ \(\d+\)$/, '');
+				{onboundschange}
+				onmarkerclick={({ id }) => {
+					const spot = id.replace(/^spot-/, '');
 					scrollToSpot(spot);
 				}}
 			/>
@@ -66,12 +80,12 @@
 				</div>
 				<div class="spot-photos">
 					{#each group.photos as photo (photo.id)}
-						<div class="spot-photo">
+						<button class="spot-photo" onclick={() => openLightbox(photo)}>
 							<img src={photo.thumbnail} alt={photo.description || photo.filename} loading="lazy" />
 							{#if photo.conditions}
 								<span class="photo-conditions">{photo.conditions}</span>
 							{/if}
-						</div>
+						</button>
 					{/each}
 				</div>
 			</section>
@@ -79,7 +93,16 @@
 	</div>
 </div>
 
+{#if lightboxPhoto}
+	<Lightbox photo={lightboxPhoto} photos={allPhotosFlat} onclose={closeLightbox} />
+{/if}
+
 <style>
+	.spot-gallery {
+		display: flex;
+		flex-direction: column;
+		gap: 24px;
+	}
 	.spot-map {
 		height: 350px;
 		border-radius: var(--radius-lg);
@@ -116,11 +139,19 @@
 		aspect-ratio: 1;
 		overflow: hidden;
 		border-radius: var(--radius-sm);
+		cursor: pointer;
+		border: none;
+		padding: 0;
+		background: var(--color-surface);
 	}
 	.spot-photo img {
 		width: 100%;
 		height: 100%;
 		object-fit: cover;
+		transition: transform 0.2s;
+	}
+	.spot-photo:hover img {
+		transform: scale(1.05);
 	}
 	.photo-conditions {
 		position: absolute;

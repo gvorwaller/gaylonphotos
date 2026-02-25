@@ -6,7 +6,7 @@
 	 *
 	 * Props: collectionSlug, photos (untagged), allPhotos, apiKey
 	 */
-	import Map from '$lib/components/common/Map.svelte';
+	import GoogleMap from '$lib/components/common/Map.svelte';
 	import { apiPost } from '$lib/api.js';
 
 	let { collectionSlug, photos = [], allPhotos = [], apiKey = '' } = $props();
@@ -196,7 +196,7 @@
 			/>
 		</div>
 		<div class="map-area">
-			<Map
+			<GoogleMap
 				{apiKey}
 				center={{ lat: 40, lng: -10 }}
 				zoom={3}

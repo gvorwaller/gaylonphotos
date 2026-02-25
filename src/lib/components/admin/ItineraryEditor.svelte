@@ -3,7 +3,7 @@
 	 * Itinerary editor with stop list and map picker.
 	 * Props: collectionSlug, itinerary, apiKey, onupdated
 	 */
-	import Map from '$lib/components/common/Map.svelte';
+	import GoogleMap from '$lib/components/common/Map.svelte';
 	import Modal from '$lib/components/common/Modal.svelte';
 	import { apiPut, apiPost, apiDelete } from '$lib/api.js';
 
@@ -194,7 +194,7 @@
 	</div>
 
 	<div class="editor-right">
-		<Map
+		<GoogleMap
 			{apiKey}
 			center={{ lat: 55, lng: 15 }}
 			zoom={4}

@@ -5,7 +5,7 @@
 	 */
 	import Map from '$lib/components/common/Map.svelte';
 
-	let { photos = [], stops = [], apiKey = '' } = $props();
+	let { photos = [], stops = [], apiKey = '', onboundschange = null } = $props();
 
 	let markers = $derived.by(() => {
 		const m = [];
@@ -52,6 +52,7 @@
 		zoom={4}
 		markers={markers}
 		polyline={polylinePath}
+		{onboundschange}
 	/>
 </div>
 

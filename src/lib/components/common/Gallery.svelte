@@ -20,7 +20,7 @@
 
 <div class="gallery-grid" style="--columns: {columns}">
 	{#each photos as photo (photo.id)}
-		<button class="gallery-item" onclick={() => openLightbox(photo)}>
+		<button id="gallery-photo-{photo.id}" class="gallery-item" onclick={() => openLightbox(photo)}>
 			<img
 				src={photo.thumbnail}
 				alt={photo.description || photo.filename}
