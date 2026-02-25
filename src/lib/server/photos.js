@@ -226,52 +226,66 @@ export async function processAndUpload(collectionSlug, fileBuffer, originalFilen
 	// 4. Upload to Spaces
 	const displayKey = `${collectionSlug}/${jpgFilename}`;
 	const thumbKey = `${collectionSlug}/thumbs/${jpgFilename}`;
+	const uploadedKeys = [];
 
-	const [displayResult, thumbResult] = await Promise.all([
-		uploadFile(displayKey, displayBuffer, 'image/jpeg'),
-		uploadFile(thumbKey, thumbBuffer, 'image/jpeg')
-	]);
-
-	// 5. Build complete photo object
-	const photo = {
-		id: uploadId,
-		filename: originalFilename,
-		url: displayResult.url,
-		thumbnail: thumbResult.url,
-		description: '',
-		tags: [],
-		favorite: false,
-		gps: exifData.gps,
-		gpsSource: exifData.gpsSource,
-		date: exifData.date,
-		camera: exifData.camera,
-		lens: exifData.lens,
-		focalLength: exifData.focalLength,
-		iso: exifData.iso,
-		aperture: exifData.aperture,
-		shutterSpeed: exifData.shutterSpeed
-	};
-
-	// 6. Atomically append to photos.json — ensure file exists first
-	const filePath = photosPath(collectionSlug);
-	await ensureDir(join(DATA_DIR, collectionSlug));
 	try {
-		await readJson(filePath);
-	} catch {
-		await writeJson(filePath, { photos: [] });
-	}
+		const [displayResult, thumbResult] = await Promise.all([
+			uploadFile(displayKey, displayBuffer, 'image/jpeg'),
+			uploadFile(thumbKey, thumbBuffer, 'image/jpeg')
+		]);
+		uploadedKeys.push(displayKey, thumbKey);
 
-	await updateJson(filePath, (data) => {
-		if (!Array.isArray(data.photos)) data.photos = [];
-		// Final dedup check inside lock (extremely unlikely with random suffix)
-		if (data.photos.some((p) => p.id === uploadId)) {
-			throw new Error(`Duplicate photo ID: ${uploadId}`);
+		// 5. Build complete photo object
+		const photo = {
+			id: uploadId,
+			filename: originalFilename,
+			url: displayResult.url,
+			thumbnail: thumbResult.url,
+			description: '',
+			tags: [],
+			favorite: false,
+			gps: exifData.gps,
+			gpsSource: exifData.gpsSource,
+			date: exifData.date,
+			camera: exifData.camera,
+			lens: exifData.lens,
+			focalLength: exifData.focalLength,
+			iso: exifData.iso,
+			aperture: exifData.aperture,
+			shutterSpeed: exifData.shutterSpeed
+		};
+
+		// 6. Atomically append to photos.json — ensure file exists first
+		const filePath = photosPath(collectionSlug);
+		await ensureDir(join(DATA_DIR, collectionSlug));
+		try {
+			await readJson(filePath);
+		} catch {
+			await writeJson(filePath, { photos: [] });
 		}
-		data.photos.push(photo);
-		return data;
-	});
 
-	return photo;
+		await updateJson(filePath, (data) => {
+			if (!Array.isArray(data.photos)) data.photos = [];
+			// Final dedup check inside lock (extremely unlikely with random suffix)
+			if (data.photos.some((p) => p.id === uploadId)) {
+				throw new Error(`Duplicate photo ID: ${uploadId}`);
+			}
+			data.photos.push(photo);
+			return data;
+		});
+
+		return photo;
+	} catch (err) {
+		// Rollback: clean up any uploaded Spaces objects on failure
+		for (const key of uploadedKeys) {
+			try {
+				await deleteFile(key);
+			} catch {
+				console.error(`Rollback: failed to delete ${key}`);
+			}
+		}
+		throw err;
+	}
 }
 
 /**
@@ -355,24 +369,28 @@ export async function updatePhotoGps(collectionSlug, photoIds, lat, lng) {
 export async function deletePhoto(collectionSlug, photoId) {
 	const filePath = photosPath(collectionSlug);
 
-	// Remove from photos.json atomically, capturing the photo for Spaces cleanup
-	let removedPhoto = null;
-	await updateJson(filePath, (data) => {
-		const idx = data.photos.findIndex((p) => p.id === photoId);
-		if (idx === -1) {
-			throw new Error(`Photo not found: ${photoId}`);
-		}
-		removedPhoto = data.photos[idx];
-		data.photos.splice(idx, 1);
-		return data;
-	});
+	// Verify photo exists before attempting Spaces delete
+	const photos = await listPhotos(collectionSlug);
+	const photo = photos.find((p) => p.id === photoId);
+	if (!photo) {
+		throw new Error(`Photo not found: ${photoId}`);
+	}
 
-	// Delete from Spaces (both display and thumbnail)
-	const displayKey = `${collectionSlug}/${removedPhoto.id}.jpg`;
-	const thumbKey = `${collectionSlug}/thumbs/${removedPhoto.id}.jpg`;
+	// Delete from Spaces FIRST — if this fails, metadata stays intact for retry
+	const displayKey = `${collectionSlug}/${photoId}.jpg`;
+	const thumbKey = `${collectionSlug}/thumbs/${photoId}.jpg`;
 
 	await Promise.all([
 		deleteFile(displayKey),
 		deleteFile(thumbKey)
 	]);
+
+	// Then remove from photos.json atomically
+	await updateJson(filePath, (data) => {
+		const idx = data.photos.findIndex((p) => p.id === photoId);
+		if (idx !== -1) {
+			data.photos.splice(idx, 1);
+		}
+		return data;
+	});
 }

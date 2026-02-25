@@ -58,8 +58,8 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
-<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-<div class="lightbox-overlay" onclick={handleOverlayClick}>
+<!-- svelte-ignore a11y_click_events_have_key_events -->
+<div class="lightbox-overlay" onclick={handleOverlayClick} role="dialog" aria-modal="true" aria-label="Photo lightbox" tabindex="-1">
 	<button class="lightbox-close" onclick={onclose} aria-label="Close">&times;</button>
 
 	{#if (navIndex ?? currentIndex) > 0}

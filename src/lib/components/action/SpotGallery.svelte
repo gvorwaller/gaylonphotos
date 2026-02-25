@@ -3,7 +3,7 @@
 	 * Action/surf collection: photos grouped by spot with embedded map.
 	 * Props: photos, apiKey
 	 */
-	import Map from '$lib/components/common/Map.svelte';
+	import GoogleMap from '$lib/components/common/Map.svelte';
 
 	let { photos = [], apiKey = '' } = $props();
 
@@ -44,7 +44,7 @@
 <div class="spot-gallery">
 	{#if apiKey}
 		<div class="spot-map">
-			<Map
+			<GoogleMap
 				{apiKey}
 				center={{ lat: 25, lng: -110 }}
 				zoom={4}

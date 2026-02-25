@@ -21,6 +21,8 @@
 
 <div class="landing">
 	<section class="hero">
+		<img src="/gaylon_photos_banner.png" alt="" class="hero-bg" />
+		<div class="hero-overlay"></div>
 		<div class="hero-content">
 			<h1>Gaylon Photos</h1>
 			<p>Travel journals, wildlife encounters, and ocean action</p>
@@ -38,7 +40,7 @@
 						{#if heroUrl}
 							<img src={heroUrl} alt={collection.name} loading="lazy" />
 						{:else}
-							<div class="card-placeholder"></div>
+							<div class="card-placeholder card-placeholder-{collection.type}"></div>
 						{/if}
 						<span class="type-badge type-badge-{collection.type}">
 							{typeLabels[collection.type] || collection.type}
@@ -60,19 +62,48 @@
 		padding-bottom: 64px;
 	}
 	.hero {
-		background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+		position: relative;
+		overflow: hidden;
 		padding: 80px 24px;
 		text-align: center;
+		min-height: 280px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+	.hero-bg {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		z-index: 0;
+	}
+	.hero-overlay {
+		position: absolute;
+		inset: 0;
+		background: linear-gradient(
+			to bottom,
+			rgba(26, 26, 46, 0.45) 0%,
+			rgba(22, 33, 62, 0.7) 100%
+		);
+		z-index: 1;
+	}
+	.hero-content {
+		position: relative;
+		z-index: 2;
 	}
 	.hero h1 {
 		color: #fff;
 		font-size: 2.5rem;
 		font-weight: 800;
 		margin-bottom: 12px;
+		text-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
 	}
 	.hero p {
-		color: rgba(255, 255, 255, 0.7);
+		color: rgba(255, 255, 255, 0.85);
 		font-size: 1.1rem;
+		text-shadow: 0 1px 6px rgba(0, 0, 0, 0.3);
 	}
 	.collections-section {
 		padding-top: 48px;
@@ -111,6 +142,21 @@
 		width: 100%;
 		height: 100%;
 		background: linear-gradient(135deg, #2d3436, #636e72);
+	}
+	.card-placeholder-travel {
+		background: linear-gradient(135deg, #b8d4e3, #7fa9c4);
+	}
+	.card-placeholder-wildlife {
+		background: linear-gradient(135deg, #b8e6c8, #7fc49a);
+	}
+	.card-placeholder-action {
+		background: linear-gradient(135deg, #f0d9b5, #d4a96a);
+	}
+	.card-image :global(.type-badge) {
+		position: absolute;
+		top: 12px;
+		left: 12px;
+		z-index: 1;
 	}
 	.card-body {
 		padding: 16px;

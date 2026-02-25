@@ -1,5 +1,6 @@
 import { json } from '@sveltejs/kit';
 import { listPhotos, processAndUpload, updatePhotoMetadata, deletePhoto } from '$lib/server/photos.js';
+import { getCollection } from '$lib/server/collections.js';
 
 /** GET /api/photos?collection=slug — List photos in a collection */
 export async function GET({ url }) {
@@ -48,6 +49,12 @@ export async function POST({ request }) {
 	// Validate slug format
 	if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(collection)) {
 		return json({ error: 'Invalid collection slug' }, { status: 400 });
+	}
+
+	// Validate collection exists before upload
+	const collectionObj = await getCollection(collection);
+	if (!collectionObj) {
+		return json({ error: `Collection not found: ${collection}` }, { status: 404 });
 	}
 
 	try {

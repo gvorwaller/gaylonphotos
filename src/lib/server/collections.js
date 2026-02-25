@@ -116,24 +116,24 @@ export async function updateCollection(slug, updates) {
  * @returns {Promise<void>}
  */
 export async function deleteCollection(slug) {
-	// Verify existence inside lock and remove from collections.json
+	// Verify existence before destructive operations
+	const existing = await getCollection(slug);
+	if (!existing) {
+		throw new Error(`Collection not found: ${slug}`);
+	}
+
+	// Delete Spaces objects FIRST — if this fails, metadata stays for retry
+	await deletePrefix(`${slug}/`);
+
+	// Remove from collections.json
 	await updateJson(COLLECTIONS_PATH, (data) => {
 		if (!Array.isArray(data.collections)) data.collections = [];
 		const idx = data.collections.findIndex((c) => c.slug === slug);
-		if (idx === -1) {
-			throw new Error(`Collection not found: ${slug}`);
+		if (idx !== -1) {
+			data.collections.splice(idx, 1);
 		}
-		data.collections.splice(idx, 1);
 		return data;
 	});
-
-	// Delete Spaces objects first (most likely to fail, and local data
-	// serves as inventory for retry if this step fails)
-	try {
-		await deletePrefix(`${slug}/`);
-	} catch (err) {
-		console.error(`Warning: failed to delete Spaces prefix ${slug}/:`, err.message);
-	}
 
 	// Delete local data directory last
 	const collectionDir = join(DATA_DIR, slug);

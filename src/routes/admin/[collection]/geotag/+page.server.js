@@ -6,7 +6,7 @@ import { error } from '@sveltejs/kit';
 export async function load({ params }) {
 	const collection = await getCollection(params.collection);
 	if (!collection) {
-		error(404, `Collection not found: ${params.collection}`);
+		throw error(404, `Collection not found: ${params.collection}`);
 	}
 
 	const allPhotos = await listPhotos(params.collection);
