@@ -68,12 +68,41 @@ export async function updateJson(filePath, updaterFn) {
 		if (result instanceof Promise) {
 			throw new Error('updaterFn must be synchronous');
 		}
+		if (result === undefined) {
+			throw new Error('updaterFn must return the updated data');
+		}
 		const serialized = JSON.stringify(result, null, 2) + '\n';
 		const tmpPath = filePath + '.tmp';
 		await writeFile(tmpPath, serialized, 'utf-8');
 		await rename(tmpPath, filePath);
 	});
 	return result;
+}
+
+/**
+ * Atomically create a JSON file only if it does not exist.
+ * Holds the per-file lock across the existence check and write,
+ * preventing TOCTOU races from concurrent callers.
+ * @param {string} filePath
+ * @param {any} data
+ * @returns {Promise<void>}
+ * @throws {Error} with message 'FILE_EXISTS' if the file already exists
+ */
+export async function createJsonIfNotExists(filePath, data) {
+	return withLock(filePath, async () => {
+		try {
+			await readFile(filePath, 'utf-8');
+			throw new Error('FILE_EXISTS');
+		} catch (err) {
+			if (err.message === 'FILE_EXISTS') throw err;
+			if (err.code !== 'ENOENT') throw err;
+			// File genuinely doesn't exist — proceed with creation
+		}
+		const serialized = JSON.stringify(data, null, 2) + '\n';
+		const tmpPath = filePath + '.tmp';
+		await writeFile(tmpPath, serialized, 'utf-8');
+		await rename(tmpPath, filePath);
+	});
 }
 
 /**

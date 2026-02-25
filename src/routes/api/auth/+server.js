@@ -11,11 +11,11 @@ export async function POST({ request, cookies }) {
 	}
 
 	const { username, password } = body;
-	if (!username || !password) {
+	if (typeof username !== 'string' || !username || typeof password !== 'string' || !password) {
 		return json({ error: 'Username and password required' }, { status: 400 });
 	}
 
-	const result = await verifyCredentials(username, password);
+	const result = await verifyCredentials(username.trim(), password);
 	if (!result) {
 		return json({ error: 'Invalid credentials' }, { status: 401 });
 	}

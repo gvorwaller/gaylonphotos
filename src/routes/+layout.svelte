@@ -16,6 +16,9 @@
 	<nav class="site-nav">
 		<div class="nav-inner">
 			<a href="/" class="nav-brand">Gaylon Photos</a>
+			{#if data.user}
+				<a href="/admin" class="nav-admin">Admin</a>
+			{/if}
 		</div>
 	</nav>
 {/if}
@@ -49,5 +52,14 @@
 		font-weight: 700;
 		color: var(--color-text);
 		text-decoration: none;
+	}
+	.nav-admin {
+		font-size: 0.85rem;
+		font-weight: 600;
+		color: var(--color-text-muted);
+		text-decoration: none;
+	}
+	.nav-admin:hover {
+		color: var(--color-text);
 	}
 </style>

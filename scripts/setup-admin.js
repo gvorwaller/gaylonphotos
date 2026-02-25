@@ -4,11 +4,15 @@
  * Creates or updates admin credentials in data/admin.json.
  * Usage: node scripts/setup-admin.js
  * Prompts for username and password interactively.
+ *
+ * WARNING: Do not run while the server is active — this script writes
+ * admin.json directly without the server's file locking. Stop the server
+ * first, then restart it after running this script.
  */
 
 import { createInterface } from 'node:readline';
-import { writeFile, mkdir } from 'node:fs/promises';
-import bcrypt from 'bcrypt';
+import { writeFile, mkdir, access } from 'node:fs/promises';
+import bcrypt from 'bcryptjs';
 
 const SALT_ROUNDS = 12;
 const ADMIN_FILE = 'data/admin.json';
@@ -25,6 +29,17 @@ function prompt(question) {
 
 async function main() {
 	console.log('=== Gaylon Photos — Admin Setup ===\n');
+
+	try {
+		await access(ADMIN_FILE);
+		const overwrite = await prompt('Admin credentials already exist. Overwrite? (y/N): ');
+		if (overwrite.toLowerCase() !== 'y') {
+			console.log('Aborted.');
+			process.exit(0);
+		}
+	} catch {
+		// File doesn't exist — proceed
+	}
 
 	const username = await prompt('Username: ');
 	if (!username) {

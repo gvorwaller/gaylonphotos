@@ -10,6 +10,12 @@
 
 	let filterSpecies = $state(null);
 
+	// Reset species filter when navigating between collections
+	$effect(() => {
+		data.collection.slug;
+		filterSpecies = null;
+	});
+
 	let displayPhotos = $derived(
 		filterSpecies
 			? data.photos.filter((p) => (p.species || 'Unknown') === filterSpecies)
@@ -33,19 +39,19 @@
 
 	<!-- Type-specific sections -->
 	{#if data.collection.type === 'travel'}
-		{#if data.itinerary?.stops?.length > 0}
+		{#if data.itinerary?.stops?.length > 0 || data.photos.some((p) => p.gps)}
 			<section style="margin-top: 32px;">
 				<h2 class="section-label">Journey</h2>
 				<ItineraryMap
 					photos={data.photos}
-					stops={data.itinerary.stops}
+					stops={data.itinerary?.stops ?? []}
 					apiKey={data.googleMapsApiKey}
 				/>
 			</section>
 
 			<section style="margin-top: 32px;">
 				<h2 class="section-label">Timeline</h2>
-				<Timeline photos={data.photos} stops={data.itinerary.stops} collectionSlug={data.collection.slug} />
+				<Timeline photos={data.photos} stops={data.itinerary?.stops ?? []} collectionSlug={data.collection.slug} />
 			</section>
 		{/if}
 
