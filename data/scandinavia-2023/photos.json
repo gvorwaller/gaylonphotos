@@ -1,0 +1,25 @@
+{
+  "photos": [
+    {
+      "id": "IMG_5173",
+      "filename": "IMG_5173.HEIC",
+      "url": "https://gaylonphotos.sfo3.cdn.digitaloceanspaces.com/scandinavia-2023/IMG_5173.jpg",
+      "thumbnail": "https://gaylonphotos.sfo3.cdn.digitaloceanspaces.com/scandinavia-2023/thumbs/IMG_5173.jpg",
+      "description": "",
+      "tags": [],
+      "favorite": false,
+      "gps": {
+        "lat": 66.15341111111111,
+        "lng": 13.079791666666667
+      },
+      "gpsSource": "exif",
+      "date": "2023-07-26T15:40:48.000Z",
+      "camera": "Apple iPhone 11 Pro Max",
+      "lens": "Apple iPhone 11 Pro Max back triple camera 6mm f/2",
+      "focalLength": "6mm",
+      "iso": 20,
+      "aperture": "f/2",
+      "shutterSpeed": "1/1653s"
+    }
+  ]
+}
