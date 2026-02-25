@@ -17,13 +17,27 @@
 			onclose?.();
 		}
 	}
+
+	function handleOverlayKeydown(e) {
+		if (e.target !== e.currentTarget) return;
+		if (e.key === 'Enter' || e.key === ' ') {
+			e.preventDefault();
+			onclose?.();
+		}
+	}
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
 
 {#if show}
-	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-	<div class="modal-overlay" onclick={handleOverlayClick}>
+	<div
+		class="modal-overlay"
+		role="button"
+		tabindex="0"
+		aria-label="Close dialog"
+		onclick={handleOverlayClick}
+		onkeydown={handleOverlayKeydown}
+	>
 		<div class="modal-content" role="dialog" aria-modal="true" aria-label={title}>
 			<div class="modal-header">
 				<h3>{title}</h3>

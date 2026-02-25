@@ -10,17 +10,25 @@
 	let { collectionSlug, itinerary = null, apiKey = '', onupdated = null } = $props();
 
 	// Working state
-	let tripName = $state(itinerary?.trip?.name || '');
-	let tripDesc = $state(itinerary?.trip?.description || '');
-	let tripStart = $state(itinerary?.trip?.startDate || '');
-	let tripEnd = $state(itinerary?.trip?.endDate || '');
-	let stops = $state(itinerary?.stops ? [...itinerary.stops] : []);
+	let tripName = $state('');
+	let tripDesc = $state('');
+	let tripStart = $state('');
+	let tripEnd = $state('');
+	let stops = $state([]);
 
 	let editingStopIdx = $state(null);
 	let pickingGps = $state(false); // true when next map click sets a stop's GPS
 	let error = $state('');
 	let saving = $state(false);
 	let showDeleteConfirm = $state(null); // stop index to delete
+
+	$effect(() => {
+		tripName = itinerary?.trip?.name || '';
+		tripDesc = itinerary?.trip?.description || '';
+		tripStart = itinerary?.trip?.startDate || '';
+		tripEnd = itinerary?.trip?.endDate || '';
+		stops = itinerary?.stops ? [...itinerary.stops] : [];
+	});
 
 	// Map markers from stops
 	let markers = $derived(

@@ -8,21 +8,21 @@
 
 	let { photo, collectionType = 'travel', onupdated = null, ondeleted = null } = $props();
 
-	let description = $state(photo.description);
-	let tagsStr = $state((photo.tags || []).join(', '));
-	let favorite = $state(photo.favorite);
-	let species = $state(photo.species || '');
-	let spot = $state(photo.spot || '');
-	let conditions = $state(photo.conditions || '');
+	let description = $state('');
+	let tagsStr = $state('');
+	let favorite = $state(false);
+	let species = $state('');
+	let spot = $state('');
+	let conditions = $state('');
 
 	// Re-sync local state when photo prop changes (e.g. after save or navigation)
 	$effect(() => {
-		description = photo.description;
-		tagsStr = (photo.tags || []).join(', ');
-		favorite = photo.favorite;
-		species = photo.species || '';
-		spot = photo.spot || '';
-		conditions = photo.conditions || '';
+		description = photo?.description ?? '';
+		tagsStr = (photo?.tags || []).join(', ');
+		favorite = !!photo?.favorite;
+		species = photo?.species || '';
+		spot = photo?.spot || '';
+		conditions = photo?.conditions || '';
 	});
 
 	let saving = $state(false);

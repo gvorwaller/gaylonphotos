@@ -12,7 +12,7 @@
 	let { collectionSlug, photos = [], allPhotos = [], apiKey = '' } = $props();
 
 	// Working copies — photos move from untagged to tagged as they're assigned
-	let untaggedPhotos = $state([...photos]);
+	let untaggedPhotos = $state([]);
 	let selectedIds = $state(new Set());
 
 	// Re-sync when navigating to a different collection's geotag page

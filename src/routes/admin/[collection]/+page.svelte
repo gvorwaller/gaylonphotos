@@ -5,11 +5,11 @@
 
 	let { data } = $props();
 
-	let photos = $state(data.photos);
+	let photos = $state([]);
 
 	// Re-sync photos when navigating between collections
 	$effect(() => {
-		photos = data.photos;
+		photos = data.photos ?? [];
 	});
 
 	function handleUploaded(photo) {
