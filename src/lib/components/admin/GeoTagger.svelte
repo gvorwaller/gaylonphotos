@@ -2,7 +2,7 @@
 	/**
 	 * THE CRITICAL FEATURE — Split-panel geo-tagging UI.
 	 * Left (40%): grid of untagged photo thumbnails with multi-select
-	 * Right (60%): Google Map with clickable placement
+	 * Right (60%): Google Map with clickable placement + place search
 	 *
 	 * Props: collectionSlug, photos (untagged), allPhotos, apiKey
 	 */
@@ -24,6 +24,48 @@
 	let pendingCoords = $state(null);
 	let assigning = $state(false);
 	let error = $state('');
+
+	// Place search
+	let searchInput;
+	let mapInstance = $state(null);
+	let autocomplete = null;
+
+	function handleMapReady(map) {
+		mapInstance = map;
+	}
+
+	// Bind Places Autocomplete once map and input are both ready
+	$effect(() => {
+		if (!mapInstance || !searchInput || !window.google?.maps?.places) return;
+		if (autocomplete) return; // already bound
+
+		autocomplete = new google.maps.places.Autocomplete(searchInput, {
+			fields: ['geometry', 'name']
+		});
+
+		autocomplete.bindTo('bounds', mapInstance);
+
+		autocomplete.addListener('place_changed', () => {
+			const place = autocomplete.getPlace();
+			if (!place.geometry?.location) return;
+
+			const lat = place.geometry.location.lat();
+			const lng = place.geometry.location.lng();
+
+			// Pan map to the selected place
+			mapInstance.setCenter({ lat, lng });
+			if (place.geometry.viewport) {
+				mapInstance.fitBounds(place.geometry.viewport);
+			} else {
+				mapInstance.setZoom(14);
+			}
+
+			// Set as pending coords (same as clicking the map)
+			if (selectedIds.size > 0) {
+				pendingCoords = { lat, lng };
+			}
+		});
+	});
 
 	// Markers: already-tagged photos (semi-transparent context) + pending preview
 	let markers = $derived.by(() => {
@@ -145,6 +187,14 @@
 	</div>
 
 	<div class="geotagger-right">
+		<div class="search-bar">
+			<input
+				bind:this={searchInput}
+				type="text"
+				class="search-input"
+				placeholder="Search for a place..."
+			/>
+		</div>
 		<div class="map-area">
 			<Map
 				{apiKey}
@@ -153,6 +203,7 @@
 				markers={markers}
 				clickable={true}
 				onmapclick={handleMapClick}
+				onmapready={handleMapReady}
 			/>
 		</div>
 
@@ -171,11 +222,11 @@
 			</div>
 		{:else if selectedCount > 0}
 			<div class="assign-bar hint">
-				Click on the map to set GPS location
+				Search a place or click the map to set GPS location
 			</div>
 		{:else}
 			<div class="assign-bar hint">
-				Select photos on the left, then click the map
+				Select photos on the left, then search or click the map
 			</div>
 		{/if}
 	</div>
@@ -256,6 +307,26 @@
 		width: 100%;
 		height: 100%;
 		object-fit: cover;
+	}
+	.search-bar {
+		padding: 8px 12px;
+		border-bottom: 1px solid var(--color-border);
+		background: var(--color-surface);
+		flex-shrink: 0;
+	}
+	.search-input {
+		width: 100%;
+		padding: 8px 12px;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		font-size: 0.9rem;
+		font-family: inherit;
+		outline: none;
+		transition: border-color 0.15s;
+	}
+	.search-input:focus {
+		border-color: var(--color-primary);
+		box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.15);
 	}
 	.map-area {
 		flex: 1;

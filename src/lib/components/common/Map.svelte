@@ -22,7 +22,8 @@
 		clickable = false,
 		apiKey = '',
 		onmapclick = null,
-		onmarkerclick = null
+		onmarkerclick = null,
+		onmapready = null
 	} = $props();
 
 	let mapContainer;
@@ -53,7 +54,7 @@
 		}
 
 		const script = document.createElement('script');
-		script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=marker`;
+		script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=marker,places`;
 		script.async = true;
 		script.onload = () => { apiLoaded = true; };
 		script.onerror = () => { console.error('Failed to load Google Maps API'); };
@@ -79,6 +80,10 @@
 					onmapclick({ lat: e.latLng.lat(), lng: e.latLng.lng() });
 				}
 			});
+		}
+
+		if (onmapready) {
+			onmapready(map);
 		}
 	});
 

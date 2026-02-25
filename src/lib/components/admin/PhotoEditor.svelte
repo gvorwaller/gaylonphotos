@@ -26,6 +26,7 @@
 	});
 
 	let saving = $state(false);
+	let saved = $state(false);
 	let error = $state('');
 	let showDeleteConfirm = $state(false);
 
@@ -53,6 +54,8 @@
 
 		saving = false;
 		if (result.ok) {
+			saved = true;
+			setTimeout(() => saved = false, 2000);
 			onupdated?.(result.data.photo);
 		} else {
 			error = result.error;
@@ -126,8 +129,8 @@
 		{/if}
 
 		<div class="editor-actions">
-			<button class="btn btn-primary btn-sm" onclick={save} disabled={saving}>
-				{saving ? 'Saving...' : 'Save'}
+			<button class="btn btn-sm" class:btn-primary={!saved} class:btn-saved={saved} onclick={save} disabled={saving}>
+				{saving ? 'Saving...' : saved ? 'Saved!' : 'Save'}
 			</button>
 			<button class="btn btn-danger btn-sm" onclick={() => showDeleteConfirm = true}>
 				Delete
@@ -222,5 +225,11 @@
 		display: flex;
 		gap: 8px;
 		margin-top: 4px;
+	}
+	.btn-saved {
+		background: var(--color-primary);
+		color: #fff;
+		opacity: 0.7;
+		cursor: default;
 	}
 </style>

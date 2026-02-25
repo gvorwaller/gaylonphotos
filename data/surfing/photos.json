@@ -5,18 +5,23 @@
       "filename": "poles-RORY-197-530x355.jpg",
       "url": "https://gaylonphotos.sfo3.cdn.digitaloceanspaces.com/surfing/poles-RORY-197-530x355.jpg",
       "thumbnail": "https://gaylonphotos.sfo3.cdn.digitaloceanspaces.com/surfing/thumbs/poles-RORY-197-530x355.jpg",
-      "description": "",
+      "description": "Huge Hurricane swell!",
       "tags": [],
       "favorite": false,
-      "gps": null,
-      "gpsSource": null,
+      "gps": {
+        "lat": 30.380736114354836,
+        "lng": -81.39753100321047
+      },
+      "gpsSource": "manual",
       "date": null,
       "camera": null,
       "lens": null,
       "focalLength": null,
       "iso": null,
       "aperture": null,
-      "shutterSpeed": null
+      "shutterSpeed": null,
+      "spot": "the Poles",
+      "conditions": ""
     }
   ]
 }
