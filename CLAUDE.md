@@ -19,7 +19,7 @@ Multi-collection photography showcase built with SvelteKit (SSR via adapter-node
 ## Commands
 
 ```bash
-# Dev server (once SvelteKit is scaffolded)
+# Dev server — runs on port 5174 (5173 is BTC Dashboard)
 npm run dev
 
 # Production build
@@ -83,6 +83,7 @@ Follow the BTC Dashboard pattern (reference: `~/BTC-dashboard/frontend/src/compo
 - Font: `system-ui, -apple-system, sans-serif`
 - Colors: green `#28a745`, red `#dc3545`, gray `#6c757d`, borders `#e9ecef`
 - Destructive actions: modal confirmation dialogs, never toast notifications
+- **Visual reference**: `mockup-v2.html` — approved UI mockup with design tokens. See DESIGN_SPEC §14 for extracted values (border radii, shadows, badge colors, nav style).
 
 ## Environment Variables
 

@@ -1096,9 +1096,9 @@ PUBLIC_GOOGLE_MAPS_API_KEY=AIza...
 SPACES_KEY=DO...
 SPACES_SECRET=...
 SPACES_BUCKET=gaylonphotos
-SPACES_REGION=nyc3
-SPACES_ENDPOINT=https://nyc3.digitaloceanspaces.com
-SPACES_CDN_URL=https://gaylonphotos.nyc3.cdn.digitaloceanspaces.com
+SPACES_REGION=sfo3
+SPACES_ENDPOINT=https://sfo3.digitaloceanspaces.com
+SPACES_CDN_URL=https://gaylonphotos.sfo3.cdn.digitaloceanspaces.com
 
 # Auth
 AUTH_SECRET=...  # Used for additional cookie signing if needed
@@ -1234,3 +1234,28 @@ After full implementation, verify end-to-end:
 12. Click photo — lightbox opens with metadata
 13. Verify mobile responsiveness at 375px and 768px widths
 14. Attempt cross-origin POST to a mutation endpoint and verify it is rejected with 403
+
+---
+
+## 14. Visual Design Reference
+
+**Mockup file**: `mockup-v2.html` (project root) — open via local HTTP server to review.
+
+This static HTML mockup is the approved visual reference for all Svelte component implementations. It covers four key views:
+
+1. **Landing Page** — Hero banner with gradient text overlay, 3-column collection card grid with color-coded type badges (travel=green, wildlife=blue, action=orange), photo counts + secondary metadata per card.
+
+2. **Collection View (travel)** — Centered header with type label, map placeholder, vertical timeline with green dot connectors (one section per itinerary stop with thumbnail row), 4-column photo gallery grid.
+
+3. **Admin Geo-Tagger** — Breadcrumb navigation, 40/60 split panel. Left: status bar + Select All/Clear controls + scrollable 4-column photo grid with green outline selection state. Right: map with gradient-fade button bar ("Assign GPS to N photos").
+
+4. **Admin Dashboard** — Header with "+ Add Collection" button, 3-column stat cards (collections, total photos, untagged), collection list cards with thumbnail, type badge, counts, and Edit/Geotag/Manage action buttons.
+
+**Design tokens** (extracted from mockup, use in `global.css`):
+- Border radius: `12px` (cards, hero, map), `6px` (buttons, thumbnails, gallery items), `20px` (badges)
+- Shadows: `0 8px 30px rgba(0,0,0,0.12)` (hero), `0 12px 28px rgba(0,0,0,0.08)` (card hover), `0 4px 16px rgba(0,0,0,0.06)` (map)
+- Button shadow (primary): `0 2px 8px rgba(40,167,69,0.25)`, hover: `0 4px 14px rgba(40,167,69,0.35)`
+- Card hover: `translateY(-4px)` lift
+- Nav: frosted glass — `backdrop-filter: blur(12px)`, `rgba(255,255,255,0.92)` background
+- Section labels: `0.7rem`, `700` weight, `0.1em` letter-spacing, uppercase, green `#28a745`
+- Type badge colors: travel `#e8f5e9/#2e7d32`, wildlife `#e3f2fd/#1565c0`, action `#fff3e0/#e65100`

@@ -9,7 +9,7 @@ build/
 data/admin.json
 
 # Source photos (large binaries — don't commit)
-photos/
+/photos/
 
 # Environment
 .env

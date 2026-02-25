@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gaylon Photos — UI Mockup v2</title>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background-color: #f8f9fa;
+            color: #212529;
+            padding-top: 56px;
+            line-height: 1.5;
+        }
+
+        /* ─── Sticky Nav ─────────────────────────── */
+        .main-nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: rgba(255,255,255,0.92);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid #e9ecef;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 56px;
+            z-index: 1000;
+            gap: 4px;
+        }
+        .main-nav a {
+            padding: 6px 18px;
+            text-decoration: none;
+            color: #6c757d;
+            font-size: 0.85rem;
+            font-weight: 600;
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
+            border-radius: 6px;
+            transition: color 0.2s, background 0.2s;
+        }
+        .main-nav a:hover {
+            color: #212529;
+            background: #f0f0f0;
+        }
+        .main-nav .nav-brand {
+            position: absolute;
+            left: 24px;
+            font-weight: 700;
+            font-size: 1rem;
+            color: #212529;
+            text-transform: none;
+            letter-spacing: 0;
+        }
+
+        /* ─── Shared ──────────────────────────────── */
+        .container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+        .section-label {
+            font-size: 0.7rem;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: #28a745;
+            margin-bottom: 8px;
+        }
+        .section-divider {
+            border: none;
+            height: 1px;
+            background: linear-gradient(to right, transparent, #e9ecef 20%, #e9ecef 80%, transparent);
+            margin: 0;
+        }
+
+        /* ─── Buttons ─────────────────────────────── */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s;
+            text-decoration: none;
+        }
+        .btn:hover { transform: translateY(-1px); }
+        .btn:active { transform: translateY(0); }
+        .btn-primary { background: #28a745; color: #fff; box-shadow: 0 2px 8px rgba(40,167,69,0.25); }
+        .btn-primary:hover { box-shadow: 0 4px 14px rgba(40,167,69,0.35); }
+        .btn-danger { background: #dc3545; color: #fff; }
+        .btn-secondary { background: #6c757d; color: #fff; }
+        .btn-outline { background: transparent; color: #6c757d; border: 1px solid #dee2e6; }
+        .btn-outline:hover { border-color: #adb5bd; color: #212529; }
+        .btn-sm { padding: 6px 14px; font-size: 0.8rem; }
+
+        /* ─── Type Badge ──────────────────────────── */
+        .type-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+        .type-badge.travel { background: #e8f5e9; color: #2e7d32; }
+        .type-badge.wildlife { background: #e3f2fd; color: #1565c0; }
+        .type-badge.action { background: #fff3e0; color: #e65100; }
+
+        /* ─── Placeholder Images ──────────────────── */
+        .placeholder {
+            background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #adb5bd;
+            font-size: 0.8rem;
+            font-weight: 500;
+            overflow: hidden;
+            position: relative;
+        }
+        .placeholder svg {
+            width: 28px;
+            height: 28px;
+            opacity: 0.4;
+        }
+        /* Variation tints for visual interest */
+        .placeholder.tint-blue { background: linear-gradient(135deg, #d0e8f2 0%, #b8d4e3 100%); }
+        .placeholder.tint-green { background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); }
+        .placeholder.tint-warm { background: linear-gradient(135deg, #f5e6d3 0%, #edd5be 100%); }
+        .placeholder.tint-purple { background: linear-gradient(135deg, #e8daef 0%, #d5c4e0 100%); }
+        .placeholder.tint-dark { background: linear-gradient(135deg, #c8cdd3 0%, #b0b7bf 100%); }
+
+        .camera-svg { fill: currentColor; }
+
+        /* ══════════════════════════════════════════════
+           SECTION 1: LANDING PAGE
+           ══════════════════════════════════════════════ */
+        .hero {
+            position: relative;
+            margin-bottom: 48px;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+        }
+        .hero img {
+            width: 100%;
+            height: 320px;
+            object-fit: cover;
+            display: block;
+        }
+        .hero-overlay {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 40px 32px 28px;
+            background: linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 100%);
+            color: #fff;
+        }
+        .hero-overlay h1 {
+            font-size: 2.2rem;
+            font-weight: 700;
+            margin-bottom: 6px;
+            letter-spacing: -0.02em;
+        }
+        .hero-overlay p {
+            font-size: 1rem;
+            opacity: 0.85;
+            font-weight: 400;
+        }
+
+        .landing-section { padding: 48px 0 56px; }
+
+        .collection-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+        }
+        .collection-card {
+            background: #fff;
+            border: 1px solid #e9ecef;
+            border-radius: 12px;
+            overflow: hidden;
+            transition: transform 0.2s, box-shadow 0.2s;
+            cursor: pointer;
+        }
+        .collection-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 28px rgba(0,0,0,0.08);
+        }
+        .collection-card-image {
+            height: 200px;
+            position: relative;
+        }
+        .collection-card-image .type-badge {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+        }
+        .collection-card-body { padding: 20px; }
+        .collection-card-body h3 {
+            font-size: 1.15rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+            color: #212529;
+        }
+        .collection-card-body p {
+            font-size: 0.875rem;
+            color: #6c757d;
+            margin-bottom: 16px;
+            line-height: 1.6;
+        }
+        .collection-card-meta {
+            display: flex;
+            gap: 16px;
+            font-size: 0.8rem;
+            color: #adb5bd;
+        }
+        .collection-card-meta span { display: flex; align-items: center; gap: 4px; }
+
+        /* ══════════════════════════════════════════════
+           SECTION 2: COLLECTION VIEW (Travel)
+           ══════════════════════════════════════════════ */
+        .collection-section { padding: 48px 0 56px; }
+
+        .collection-header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        .collection-header h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+            letter-spacing: -0.02em;
+        }
+        .collection-header p {
+            font-size: 1rem;
+            color: #6c757d;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .map-container {
+            height: 380px;
+            border-radius: 12px;
+            margin-bottom: 48px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+            font-size: 1rem;
+            color: #6c757d;
+        }
+
+        .subsection-title {
+            font-size: 1.2rem;
+            font-weight: 700;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .subsection-title::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: #e9ecef;
+        }
+
+        .timeline { margin-bottom: 48px; }
+        .timeline-stop {
+            position: relative;
+            padding-left: 28px;
+            padding-bottom: 32px;
+            border-left: 2px solid #e9ecef;
+            margin-left: 8px;
+        }
+        .timeline-stop:last-child { border-left-color: transparent; padding-bottom: 0; }
+        .timeline-stop::before {
+            content: '';
+            position: absolute;
+            left: -7px;
+            top: 4px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #28a745;
+            border: 2px solid #fff;
+            box-shadow: 0 0 0 2px #28a745;
+        }
+        .timeline-stop h3 { font-size: 1rem; font-weight: 700; margin-bottom: 2px; }
+        .timeline-stop .dates { font-size: 0.825rem; color: #6c757d; margin-bottom: 12px; }
+        .thumbnail-row {
+            display: flex;
+            gap: 8px;
+        }
+        .thumbnail-row .placeholder {
+            width: 120px;
+            height: 80px;
+            border-radius: 6px;
+            flex-shrink: 0;
+        }
+
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+        }
+        .gallery-item {
+            border-radius: 6px;
+            overflow: hidden;
+            aspect-ratio: 4/3;
+            transition: transform 0.2s, box-shadow 0.2s;
+            cursor: pointer;
+        }
+        .gallery-item:hover {
+            transform: scale(1.03);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.1);
+            z-index: 1;
+            position: relative;
+        }
+
+        /* ══════════════════════════════════════════════
+           SECTION 3: ADMIN GEO-TAGGER
+           ══════════════════════════════════════════════ */
+        .geotagger-section { padding: 48px 0 56px; }
+
+        .geotagger-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 24px;
+        }
+        .geotagger-header h2 { font-size: 1.4rem; font-weight: 700; }
+        .breadcrumb {
+            font-size: 0.825rem;
+            color: #6c757d;
+        }
+        .breadcrumb span { color: #212529; font-weight: 600; }
+
+        .geotagger-layout {
+            display: flex;
+            height: 560px;
+            gap: 16px;
+        }
+        .geotagger-panel-photos {
+            flex: 0 0 40%;
+            background: #fff;
+            border: 1px solid #e9ecef;
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .geotagger-panel-photos-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid #e9ecef;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+        }
+        .geotagger-status {
+            font-size: 0.85rem;
+            color: #6c757d;
+        }
+        .geotagger-status strong { color: #212529; }
+        .geotagger-panel-photos-controls {
+            padding: 10px 20px;
+            border-bottom: 1px solid #f0f0f0;
+            display: flex;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+        .geotagger-photos-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 6px;
+            padding: 12px;
+            overflow-y: auto;
+            flex: 1;
+        }
+        .geo-thumb {
+            aspect-ratio: 1;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: outline-color 0.15s, transform 0.15s;
+            outline: 3px solid transparent;
+            outline-offset: 1px;
+        }
+        .geo-thumb:hover { transform: scale(1.05); }
+        .geo-thumb.selected {
+            outline-color: #28a745;
+            box-shadow: 0 0 0 1px #fff, 0 0 12px rgba(40,167,69,0.3);
+        }
+
+        .geotagger-panel-map {
+            flex: 0 0 60%;
+            background: #fff;
+            border: 1px solid #e9ecef;
+            border-radius: 12px;
+            position: relative;
+            overflow: hidden;
+        }
+        .geotagger-map-placeholder {
+            width: 100%;
+            height: 100%;
+            font-size: 1rem;
+            border-radius: 12px;
+        }
+        .geotagger-map-button-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 16px 20px;
+            background: linear-gradient(to top, rgba(255,255,255,0.95), rgba(255,255,255,0));
+            display: flex;
+            justify-content: center;
+        }
+
+        /* ══════════════════════════════════════════════
+           SECTION 4: ADMIN DASHBOARD
+           ══════════════════════════════════════════════ */
+        .admin-section { padding: 48px 0 56px; }
+
+        .admin-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .admin-header h2 { font-size: 1.4rem; font-weight: 700; }
+        .admin-subtitle { color: #6c757d; font-size: 0.9rem; margin-bottom: 28px; }
+
+        .admin-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+        .stat-card {
+            background: #fff;
+            border: 1px solid #e9ecef;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+        }
+        .stat-card .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #28a745;
+            line-height: 1;
+            margin-bottom: 4px;
+        }
+        .stat-card .stat-label { font-size: 0.8rem; color: #6c757d; text-transform: uppercase; letter-spacing: 0.05em; }
+
+        .admin-collection-list { display: flex; flex-direction: column; gap: 12px; }
+        .admin-collection-card {
+            background: #fff;
+            border: 1px solid #e9ecef;
+            border-radius: 10px;
+            padding: 20px 24px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            transition: box-shadow 0.2s;
+        }
+        .admin-collection-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .admin-card-thumb {
+            width: 56px;
+            height: 56px;
+            border-radius: 8px;
+            flex-shrink: 0;
+        }
+        .admin-card-info { flex: 1; }
+        .admin-card-info h3 { font-size: 1rem; font-weight: 700; margin-bottom: 4px; }
+        .admin-card-info .admin-card-detail {
+            font-size: 0.825rem;
+            color: #6c757d;
+            display: flex;
+            gap: 16px;
+        }
+        .admin-card-actions { display: flex; gap: 8px; }
+
+        /* ─── Footer ──────────────────────────────── */
+        .mockup-footer {
+            text-align: center;
+            padding: 32px 0;
+            font-size: 0.75rem;
+            color: #adb5bd;
+        }
+    </style>
+</head>
+<body>
+
+<nav class="main-nav">
+    <a href="#landing" class="nav-brand">Gaylon Photos</a>
+    <a href="#landing">Landing</a>
+    <a href="#collection">Collection</a>
+    <a href="#geotagger">Geo-Tagger</a>
+    <a href="#dashboard">Dashboard</a>
+</nav>
+
+<!-- ═══════════════════════════════════════════════
+     SECTION 1: LANDING PAGE
+     ═══════════════════════════════════════════════ -->
+<section id="landing" class="landing-section">
+    <div class="container">
+        <div class="hero">
+            <img src="gaylon_photos_banner.png" alt="Fjords, seabirds, and surfers">
+            <div class="hero-overlay">
+                <h1>Gaylon Photos</h1>
+                <p>Travel journals, wildlife encounters, and ocean action</p>
+            </div>
+        </div>
+
+        <div class="section-label">Collections</div>
+        <div class="collection-grid">
+            <div class="collection-card">
+                <div class="collection-card-image placeholder tint-blue">
+                    <span class="type-badge travel">Travel</span>
+                    <svg class="camera-svg" width="32" height="32" viewBox="0 0 24 24"><path d="M4 4h3l2-2h6l2 2h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2m8 3a5 5 0 1 0 0 10 5 5 0 0 0 0-10m0 2a3 3 0 1 1 0 6 3 3 0 0 1 0-6Z"/></svg>
+                </div>
+                <div class="collection-card-body">
+                    <h3>Scandinavia 2023</h3>
+                    <p>Exploring fjords, northern lights, and coastal villages across Norway, Sweden, and Denmark.</p>
+                    <div class="collection-card-meta">
+                        <span>152 photos</span>
+                        <span>Jun–Jul 2023</span>
+                    </div>
+                </div>
+            </div>
+            <div class="collection-card">
+                <div class="collection-card-image placeholder tint-green">
+                    <span class="type-badge wildlife">Wildlife</span>
+                    <svg class="camera-svg" width="32" height="32" viewBox="0 0 24 24"><path d="M4 4h3l2-2h6l2 2h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2m8 3a5 5 0 1 0 0 10 5 5 0 0 0 0-10m0 2a3 3 0 1 1 0 6 3 3 0 0 1 0-6Z"/></svg>
+                </div>
+                <div class="collection-card-body">
+                    <h3>Bird Photography</h3>
+                    <p>Capturing species in their natural habitats — herons, eagles, kingfishers, and shorebirds.</p>
+                    <div class="collection-card-meta">
+                        <span>88 photos</span>
+                        <span>12 species</span>
+                    </div>
+                </div>
+            </div>
+            <div class="collection-card">
+                <div class="collection-card-image placeholder tint-warm">
+                    <span class="type-badge action">Action</span>
+                    <svg class="camera-svg" width="32" height="32" viewBox="0 0 24 24"><path d="M4 4h3l2-2h6l2 2h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2m8 3a5 5 0 1 0 0 10 5 5 0 0 0 0-10m0 2a3 3 0 1 1 0 6 3 3 0 0 1 0-6Z"/></svg>
+                </div>
+                <div class="collection-card-body">
+                    <h3>Surfing Sessions</h3>
+                    <p>The power of the ocean and the grace of surfers at local California breaks.</p>
+                    <div class="collection-card-meta">
+                        <span>45 photos</span>
+                        <span>3 spots</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<hr class="section-divider">
+
+<!-- ═══════════════════════════════════════════════
+     SECTION 2: COLLECTION VIEW (Travel)
+     ═══════════════════════════════════════════════ -->
+<section id="collection" class="collection-section">
+    <div class="container">
+        <div class="collection-header">
+            <div class="section-label">Travel Collection</div>
+            <h1>Scandinavia 2023</h1>
+            <p>A travel journal exploring fjords, northern lights, and coastal villages across Norway, Sweden, and Denmark.</p>
+        </div>
+
+        <div class="map-container placeholder tint-blue">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:8px;">
+                <svg width="40" height="40" fill="#6c757d" opacity="0.4" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7m0 9.5A2.5 2.5 0 0 1 9.5 9 2.5 2.5 0 0 1 12 6.5 2.5 2.5 0 0 1 14.5 9a2.5 2.5 0 0 1-2.5 2.5Z"/></svg>
+                <span>Itinerary Map — 3 stops connected by route</span>
+            </div>
+        </div>
+
+        <div class="subsection-title">Timeline</div>
+        <div class="timeline">
+            <div class="timeline-stop">
+                <h3>Tromso, Norway</h3>
+                <div class="dates">June 15 – June 20, 2023</div>
+                <div class="thumbnail-row">
+                    <div class="placeholder tint-blue"></div>
+                    <div class="placeholder tint-dark"></div>
+                    <div class="placeholder tint-purple"></div>
+                    <div class="placeholder tint-blue"></div>
+                </div>
+            </div>
+            <div class="timeline-stop">
+                <h3>Lofoten Islands, Norway</h3>
+                <div class="dates">June 21 – June 26, 2023</div>
+                <div class="thumbnail-row">
+                    <div class="placeholder tint-green"></div>
+                    <div class="placeholder tint-blue"></div>
+                    <div class="placeholder tint-warm"></div>
+                </div>
+            </div>
+            <div class="timeline-stop">
+                <h3>Stockholm, Sweden</h3>
+                <div class="dates">June 27 – July 2, 2023</div>
+                <div class="thumbnail-row">
+                    <div class="placeholder tint-warm"></div>
+                    <div class="placeholder tint-purple"></div>
+                    <div class="placeholder tint-dark"></div>
+                    <div class="placeholder tint-green"></div>
+                    <div class="placeholder tint-blue"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="subsection-title">Photo Gallery</div>
+        <div class="gallery-grid">
+            <div class="gallery-item placeholder tint-blue"></div>
+            <div class="gallery-item placeholder tint-dark"></div>
+            <div class="gallery-item placeholder tint-green"></div>
+            <div class="gallery-item placeholder tint-warm"></div>
+            <div class="gallery-item placeholder tint-purple"></div>
+            <div class="gallery-item placeholder tint-blue"></div>
+            <div class="gallery-item placeholder tint-dark"></div>
+            <div class="gallery-item placeholder tint-green"></div>
+            <div class="gallery-item placeholder tint-warm"></div>
+            <div class="gallery-item placeholder tint-purple"></div>
+            <div class="gallery-item placeholder tint-blue"></div>
+            <div class="gallery-item placeholder tint-dark"></div>
+        </div>
+    </div>
+</section>
+
+<hr class="section-divider">
+
+<!-- ═══════════════════════════════════════════════
+     SECTION 3: ADMIN GEO-TAGGER
+     ═══════════════════════════════════════════════ -->
+<section id="geotagger" class="geotagger-section">
+    <div class="container">
+        <div class="geotagger-header">
+            <div>
+                <div class="breadcrumb">Admin &rsaquo; Scandinavia 2023 &rsaquo; <span>Geo-Tagger</span></div>
+                <h2>Assign GPS Coordinates</h2>
+            </div>
+        </div>
+
+        <div class="geotagger-layout">
+            <div class="geotagger-panel-photos">
+                <div class="geotagger-panel-photos-header">
+                    <div class="geotagger-status"><strong>12</strong> untagged &middot; <strong>3</strong> selected</div>
+                </div>
+                <div class="geotagger-panel-photos-controls">
+                    <button class="btn btn-outline btn-sm">Select All</button>
+                    <button class="btn btn-outline btn-sm">Clear</button>
+                </div>
+                <div class="geotagger-photos-grid">
+                    <div class="geo-thumb placeholder tint-blue selected"></div>
+                    <div class="geo-thumb placeholder tint-dark"></div>
+                    <div class="geo-thumb placeholder tint-green selected"></div>
+                    <div class="geo-thumb placeholder tint-warm"></div>
+                    <div class="geo-thumb placeholder tint-purple"></div>
+                    <div class="geo-thumb placeholder tint-blue"></div>
+                    <div class="geo-thumb placeholder tint-dark selected"></div>
+                    <div class="geo-thumb placeholder tint-green"></div>
+                    <div class="geo-thumb placeholder tint-warm"></div>
+                    <div class="geo-thumb placeholder tint-purple"></div>
+                    <div class="geo-thumb placeholder tint-blue"></div>
+                    <div class="geo-thumb placeholder tint-dark"></div>
+                </div>
+            </div>
+            <div class="geotagger-panel-map">
+                <div class="geotagger-map-placeholder placeholder tint-blue" style="border-radius:12px;">
+                    <div style="display:flex;flex-direction:column;align-items:center;gap:8px;">
+                        <svg width="40" height="40" fill="#6c757d" opacity="0.4" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7m0 9.5A2.5 2.5 0 0 1 9.5 9 2.5 2.5 0 0 1 12 6.5 2.5 2.5 0 0 1 14.5 9a2.5 2.5 0 0 1-2.5 2.5Z"/></svg>
+                        <span>Click map to place pin</span>
+                    </div>
+                </div>
+                <div class="geotagger-map-button-bar">
+                    <button class="btn btn-primary">Assign GPS to 3 photos</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<hr class="section-divider">
+
+<!-- ═══════════════════════════════════════════════
+     SECTION 4: ADMIN DASHBOARD
+     ═══════════════════════════════════════════════ -->
+<section id="dashboard" class="admin-section">
+    <div class="container">
+        <div class="admin-header">
+            <h2>Admin Dashboard</h2>
+            <button class="btn btn-primary">+ Add Collection</button>
+        </div>
+        <div class="admin-subtitle">Manage your photo collections</div>
+
+        <div class="admin-stats">
+            <div class="stat-card">
+                <div class="stat-value">3</div>
+                <div class="stat-label">Collections</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">285</div>
+                <div class="stat-label">Total Photos</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">47</div>
+                <div class="stat-label">Untagged</div>
+            </div>
+        </div>
+
+        <div class="subsection-title">Collections</div>
+        <div class="admin-collection-list">
+            <div class="admin-collection-card">
+                <div class="admin-card-thumb placeholder tint-blue"></div>
+                <div class="admin-card-info">
+                    <h3>Scandinavia 2023</h3>
+                    <div class="admin-card-detail">
+                        <span class="type-badge travel">Travel</span>
+                        <span>152 photos</span>
+                        <span>23 untagged</span>
+                    </div>
+                </div>
+                <div class="admin-card-actions">
+                    <button class="btn btn-outline btn-sm">Edit</button>
+                    <button class="btn btn-outline btn-sm">Geotag</button>
+                    <button class="btn btn-secondary btn-sm">Manage Photos</button>
+                </div>
+            </div>
+            <div class="admin-collection-card">
+                <div class="admin-card-thumb placeholder tint-green"></div>
+                <div class="admin-card-info">
+                    <h3>Bird Photography</h3>
+                    <div class="admin-card-detail">
+                        <span class="type-badge wildlife">Wildlife</span>
+                        <span>88 photos</span>
+                        <span>18 untagged</span>
+                    </div>
+                </div>
+                <div class="admin-card-actions">
+                    <button class="btn btn-outline btn-sm">Edit</button>
+                    <button class="btn btn-outline btn-sm">Geotag</button>
+                    <button class="btn btn-secondary btn-sm">Manage Photos</button>
+                </div>
+            </div>
+            <div class="admin-collection-card">
+                <div class="admin-card-thumb placeholder tint-warm"></div>
+                <div class="admin-card-info">
+                    <h3>Surfing Sessions</h3>
+                    <div class="admin-card-detail">
+                        <span class="type-badge action">Action</span>
+                        <span>45 photos</span>
+                        <span>6 untagged</span>
+                    </div>
+                </div>
+                <div class="admin-card-actions">
+                    <button class="btn btn-outline btn-sm">Edit</button>
+                    <button class="btn btn-outline btn-sm">Geotag</button>
+                    <button class="btn btn-secondary btn-sm">Manage Photos</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<div class="mockup-footer">UI Mockup v2 — Gaylon Photos — Feb 2026</div>
+
+</body>
+</html>
