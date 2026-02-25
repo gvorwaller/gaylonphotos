@@ -97,18 +97,39 @@ for slug in "${slugs[@]}"; do
 	total_skipped=$((total_skipped + skipped))
 	total_failed=$((total_failed + failed))
 
-	# Move successfully processed files to imported/
+	# Move only successfully processed files to imported/
+	# Parse output to find which files succeeded (✓) or were skipped (SKIP)
 	if [ "$ingested" -gt 0 ] || [ "$skipped" -gt 0 ]; then
 		imported_dir="$src_dir/imported"
 		mkdir -p "$imported_dir"
 
+		# Extract failed filenames from node output to skip during move
+		# Failed lines:    "    ✗ FAILED: filename.jpg — error"
+		failed_files=$(echo "$output" | sed -n 's/^[[:space:]]*✗ FAILED: \(.*\) —.*/\1/p')
+
 		moved=0
 		for img in "$src_dir"/*; do
 			[ -f "$img" ] || continue
-			ext="${img##*.}"
+			basename_img="$(basename "$img")"
+			ext="${basename_img##*.}"
 			ext_lower=$(echo "$ext" | tr '[:upper:]' '[:lower:]')
 			case "$ext_lower" in
 				jpg|jpeg|png|webp|heic|heif|tif|tiff)
+					# Check if this file failed — if so, leave it for retry
+					is_failed=false
+					while IFS= read -r ff; do
+						[ -z "$ff" ] && continue
+						if [ "$ff" = "$basename_img" ]; then
+							is_failed=true
+							break
+						fi
+					done <<< "$failed_files"
+
+					if [ "$is_failed" = true ]; then
+						echo "[$slug] Leaving failed file for retry: $basename_img"
+						continue
+					fi
+
 					mv "$img" "$imported_dir/"
 					moved=$((moved + 1))
 					# Also move sidecar JSON if it exists (Google Takeout)

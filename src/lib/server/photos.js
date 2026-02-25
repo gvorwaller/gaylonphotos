@@ -1,4 +1,4 @@
-import { readJson, writeJson, updateJson, ensureDir } from './json-store.js';
+import { readJson, updateJson, createJsonIfNotExists, ensureDir } from './json-store.js';
 import { uploadFile, deleteFile, getCdnUrl } from './storage.js';
 import sharp from 'sharp';
 import exifr from 'exifr';
@@ -10,11 +10,6 @@ const DISPLAY_WIDTH = 1600;
 const DATA_DIR = 'data';
 
 /**
- * Resolve the photos.json path for a collection.
- * @param {string} slug
- * @returns {string}
- */
-/**
  * Validate a collection slug to prevent path traversal.
  * @param {string} slug
  */
@@ -24,6 +19,11 @@ function validateSlug(slug) {
 	}
 }
 
+/**
+ * Resolve the photos.json path for a collection.
+ * @param {string} slug
+ * @returns {string}
+ */
 function photosPath(slug) {
 	validateSlug(slug);
 	return join(DATA_DIR, slug, 'photos.json');
@@ -261,13 +261,13 @@ export async function processAndUpload(collectionSlug, fileBuffer, originalFilen
 			shutterSpeed: exifData.shutterSpeed
 		};
 
-		// 6. Atomically append to photos.json — ensure file exists first
+		// 6. Atomically append to photos.json — ensure file exists (atomic — prevents TOCTOU race)
 		const filePath = photosPath(collectionSlug);
 		await ensureDir(join(DATA_DIR, collectionSlug));
 		try {
-			await readJson(filePath);
-		} catch {
-			await writeJson(filePath, { photos: [] });
+			await createJsonIfNotExists(filePath, { photos: [] });
+		} catch (err) {
+			if (err.message !== 'FILE_EXISTS') throw err;
 		}
 
 		await updateJson(filePath, (data) => {

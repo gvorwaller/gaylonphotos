@@ -1,16 +1,12 @@
-import { readJson, writeJson, updateJson, ensureDir } from './json-store.js';
+import { readJson, writeJson, updateJson, createJsonIfNotExists, ensureDir } from './json-store.js';
 import { getCollection } from './collections.js';
 import { join } from 'node:path';
 
 const DATA_DIR = 'data';
 
 /**
- * Resolve the itinerary.json path for a collection.
- * @param {string} slug
- * @returns {string}
- */
-/**
  * Validate a collection slug to prevent path traversal.
+ * @param {string} slug
  */
 function validateSlug(slug) {
 	if (!slug || !/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(slug)) {
@@ -18,6 +14,11 @@ function validateSlug(slug) {
 	}
 }
 
+/**
+ * Resolve the itinerary.json path for a collection.
+ * @param {string} slug
+ * @returns {string}
+ */
 function itineraryPath(slug) {
 	validateSlug(slug);
 	return join(DATA_DIR, slug, 'itinerary.json');
@@ -79,16 +80,15 @@ export async function addStop(collectionSlug, stopData) {
 	const filePath = itineraryPath(collectionSlug);
 	let newStop;
 
-	// Ensure itinerary file exists before atomic update
+	// Ensure itinerary file exists (atomic — prevents TOCTOU race)
+	await ensureDir(join(DATA_DIR, collectionSlug));
 	try {
-		await readJson(filePath);
-	} catch {
-		// File doesn't exist — initialize with empty itinerary
-		await ensureDir(join(DATA_DIR, collectionSlug));
-		await writeJson(filePath, {
+		await createJsonIfNotExists(filePath, {
 			trip: { name: '', description: '', startDate: null, endDate: null },
 			stops: []
 		});
+	} catch (err) {
+		if (err.message !== 'FILE_EXISTS') throw err;
 	}
 
 	await updateJson(filePath, (data) => {

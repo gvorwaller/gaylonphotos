@@ -10,10 +10,18 @@ export async function POST({ request }) {
 		return json({ error: 'Invalid JSON' }, { status: 400 });
 	}
 
+	if (!body || typeof body !== 'object' || Array.isArray(body)) {
+		return json({ error: 'Request body must be a JSON object' }, { status: 400 });
+	}
+
 	const { collection, photoIds, lat, lng } = body;
 
 	if (!collection || !Array.isArray(photoIds) || photoIds.length === 0) {
 		return json({ error: 'collection and non-empty photoIds array required' }, { status: 400 });
+	}
+
+	if (!photoIds.every((id) => typeof id === 'string' && id)) {
+		return json({ error: 'All photoIds must be non-empty strings' }, { status: 400 });
 	}
 
 	if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(collection)) {

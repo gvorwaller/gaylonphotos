@@ -1,10 +1,20 @@
-import { readJson, updateJson, writeJson, ensureDir } from './json-store.js';
+import { readJson, updateJson, createJsonIfNotExists, ensureDir } from './json-store.js';
 import { deletePrefix } from './storage.js';
 import { join } from 'node:path';
 import { rm } from 'node:fs/promises';
 
 const COLLECTIONS_PATH = 'data/collections.json';
 const DATA_DIR = 'data';
+
+/**
+ * Validate a collection slug to prevent path traversal.
+ * @param {string} slug
+ */
+function validateSlug(slug) {
+	if (!slug || !/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(slug)) {
+		throw new Error('Invalid collection slug');
+	}
+}
 
 /**
  * List all collections.
@@ -25,6 +35,7 @@ export async function listCollections() {
  * @returns {Promise<object|null>}
  */
 export async function getCollection(slug) {
+	if (!slug || !/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(slug)) return null;
 	const collections = await listCollections();
 	return collections.find((c) => c.slug === slug) || null;
 }
@@ -37,9 +48,10 @@ export async function getCollection(slug) {
  */
 export async function createCollection(collectionData) {
 	const { slug, name, type, description } = collectionData;
+	validateSlug(slug);
 
-	if (!slug || !name || !type) {
-		throw new Error('slug, name, and type are required');
+	if (!name || !type) {
+		throw new Error('name and type are required');
 	}
 
 	const validTypes = ['travel', 'wildlife', 'action'];
@@ -56,12 +68,12 @@ export async function createCollection(collectionData) {
 		...(type === 'travel' ? { dateRange: collectionData.dateRange || { start: null, end: null } } : {})
 	};
 
-	// Ensure collections.json exists (fresh install)
+	// Ensure collections.json exists (atomic — prevents TOCTOU race on fresh install)
 	await ensureDir(DATA_DIR);
 	try {
-		await readJson(COLLECTIONS_PATH);
-	} catch {
-		await writeJson(COLLECTIONS_PATH, { collections: [] });
+		await createJsonIfNotExists(COLLECTIONS_PATH, { collections: [] });
+	} catch (err) {
+		if (err.message !== 'FILE_EXISTS') throw err;
 	}
 
 	// Add to collections.json — duplicate check inside lock to prevent TOCTOU race
@@ -77,7 +89,11 @@ export async function createCollection(collectionData) {
 	// Create data directory and initialize empty photos.json
 	const collectionDir = join(DATA_DIR, slug);
 	await ensureDir(collectionDir);
-	await writeJson(join(collectionDir, 'photos.json'), { photos: [] });
+	try {
+		await createJsonIfNotExists(join(collectionDir, 'photos.json'), { photos: [] });
+	} catch (err) {
+		if (err.message !== 'FILE_EXISTS') throw err;
+	}
 
 	return collection;
 }
@@ -90,6 +106,7 @@ export async function createCollection(collectionData) {
  * @returns {Promise<object>} updated Collection
  */
 export async function updateCollection(slug, updates) {
+	validateSlug(slug);
 	// Prevent changing slug or type (would break file structure)
 	delete updates.slug;
 	delete updates.type;
@@ -116,6 +133,7 @@ export async function updateCollection(slug, updates) {
  * @returns {Promise<void>}
  */
 export async function deleteCollection(slug) {
+	validateSlug(slug);
 	// Verify existence before destructive operations
 	const existing = await getCollection(slug);
 	if (!existing) {

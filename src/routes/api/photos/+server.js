@@ -37,6 +37,12 @@ export async function POST({ request }) {
 		return json({ error: 'file must be a non-empty file' }, { status: 400 });
 	}
 
+	// Reject oversized uploads before image processing
+	const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
+	if (file.size > MAX_FILE_SIZE) {
+		return json({ error: 'File too large. Maximum size is 50 MB.' }, { status: 413 });
+	}
+
 	// Validate content type (client-provided, checked again via magic bytes below)
 	const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
 	if (!allowedTypes.includes(file.type)) {
