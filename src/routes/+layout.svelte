@@ -41,9 +41,7 @@
 				<span class="hamburger-line" class:open={menuOpen}></span>
 			</button>
 			<a href="/" class="nav-brand">Gaylon Photos</a>
-			{#if data.user}
-				<a href="/admin" class="nav-admin">Admin</a>
-			{/if}
+			<a href="/admin" class="nav-admin">Admin</a>
 		</div>
 	</nav>
 
