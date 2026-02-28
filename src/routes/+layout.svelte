@@ -1,5 +1,6 @@
 <script>
 	import '../styles/global.css';
+	import Hamburger from '$lib/components/common/Hamburger.svelte';
 	import { currentUser } from '$lib/stores.js';
 	import { page } from '$app/stores';
 	import { afterNavigate } from '$app/navigation';
@@ -29,17 +30,11 @@
 {#if !isAdmin}
 	<nav class="site-nav">
 		<div class="nav-inner">
-			<button
-				class="hamburger"
-				aria-label={menuOpen ? 'Close menu' : 'Open menu'}
-				aria-expanded={menuOpen}
-				aria-controls="nav-drawer"
+			<Hamburger
+				open={menuOpen}
+				ariaControls="nav-drawer"
 				onclick={() => menuOpen = !menuOpen}
-			>
-				<span class="hamburger-line" class:open={menuOpen}></span>
-				<span class="hamburger-line" class:open={menuOpen}></span>
-				<span class="hamburger-line" class:open={menuOpen}></span>
-			</button>
+			/>
 			<a href="/" class="nav-brand">Gaylon Photos</a>
 			<a href="/admin" class="nav-admin">Admin</a>
 		</div>
@@ -104,42 +99,6 @@
 	}
 	.nav-admin:hover {
 		color: var(--color-text);
-	}
-
-	/* Hamburger button */
-	.hamburger {
-		display: flex;
-		flex-direction: column;
-		justify-content: center;
-		gap: 5px;
-		width: 36px;
-		height: 36px;
-		padding: 6px;
-		background: none;
-		border: none;
-		cursor: pointer;
-		border-radius: var(--radius-sm);
-	}
-	.hamburger:hover {
-		background: rgba(0, 0, 0, 0.05);
-	}
-	.hamburger-line {
-		display: block;
-		width: 100%;
-		height: 2px;
-		background: var(--color-text);
-		border-radius: 1px;
-		transition: transform 0.25s ease, opacity 0.25s ease;
-		transform-origin: center;
-	}
-	.hamburger-line.open:nth-child(1) {
-		transform: translateY(7px) rotate(45deg);
-	}
-	.hamburger-line.open:nth-child(2) {
-		opacity: 0;
-	}
-	.hamburger-line.open:nth-child(3) {
-		transform: translateY(-7px) rotate(-45deg);
 	}
 
 	/* Backdrop */

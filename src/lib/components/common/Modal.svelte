@@ -4,7 +4,17 @@
 	 * Props: title, show, onclose
 	 * Slots: default (body), actions (footer buttons)
 	 */
+	import { modalCount } from '$lib/stores.js';
+
 	let { title = '', show = false, onclose = null, children, actions } = $props();
+
+	// Track open modals so parent layouts can defer Escape handling
+	$effect(() => {
+		if (show) {
+			modalCount.update(n => n + 1);
+			return () => modalCount.update(n => n - 1);
+		}
+	});
 
 	function handleKeydown(e) {
 		if (e.key === 'Escape' && show) {

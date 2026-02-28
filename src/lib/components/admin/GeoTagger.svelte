@@ -351,4 +351,35 @@
 		color: var(--color-text-muted);
 		font-size: 0.85rem;
 	}
+
+	@media (max-width: 1024px) {
+		.geotagger {
+			flex-direction: column;
+			height: auto;
+			min-height: calc(100vh - 160px); /* topbar + page header + margins */
+		}
+		.geotagger-left {
+			width: 100%;
+			border-right: none;
+			border-bottom: 1px solid var(--color-border);
+			max-height: 40vh;
+			overflow: hidden auto;
+		}
+		.geotagger-toolbar {
+			position: sticky;
+			top: 0;
+			background: var(--color-surface);
+			z-index: 1;
+		}
+		.photo-grid {
+			overflow-y: visible;
+		}
+		.geotagger-right {
+			width: 100%;
+			flex: 1;
+		}
+		.map-area {
+			min-height: 50vh;
+		}
+	}
 </style>

@@ -27,6 +27,27 @@
 		uploadFiles(files);
 	}
 
+	function handlePaste(e) {
+		if (uploading) return;
+		// Skip if user is typing in an input or textarea
+		const active = document.activeElement;
+		if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) return;
+
+		const items = e.clipboardData?.items;
+		if (!items) return;
+		const files = [];
+		for (const item of items) {
+			if (item.type.startsWith('image/')) {
+				const file = item.getAsFile();
+				if (file) files.push(file);
+			}
+		}
+		if (files.length > 0) {
+			e.preventDefault();
+			uploadFiles(files);
+		}
+	}
+
 	function handleFileInput(e) {
 		const files = Array.from(e.target.files);
 		uploadFiles(files);
@@ -34,6 +55,8 @@
 	}
 
 	async function uploadFiles(files) {
+		if (uploading) return;
+
 		const imageFiles = files.filter((f) =>
 			f.type.startsWith('image/')
 		);
@@ -79,7 +102,7 @@
 		ondragleave={handleDragLeave}
 		ondrop={handleDrop}
 	>
-		<p>Drag & drop photos here</p>
+		<p>Drag & drop photos here, or paste from clipboard</p>
 		<span>or</span>
 		<label class="btn btn-outline btn-sm">
 			Browse Files
@@ -118,6 +141,8 @@
 		</div>
 	{/if}
 </div>
+
+<svelte:window onpaste={handlePaste} />
 
 <style>
 	.drop-zone {
@@ -184,5 +209,11 @@
 	.progress-status {
 		color: var(--color-text-muted);
 		flex-shrink: 0;
+	}
+
+	@media (max-width: 1024px) {
+		.drop-zone {
+			padding: 24px;
+		}
 	}
 </style>

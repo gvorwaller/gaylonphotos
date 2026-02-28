@@ -6,9 +6,12 @@
 	import { goto } from '$app/navigation';
 	import { apiDelete } from '$lib/api.js';
 
-	let { collections = [], currentPath = '' } = $props();
+	let { collections = [], currentPath = '', open = false, onlinkclick = null, inert = false } = $props();
+
+	let navEl;
 
 	async function handleLogout() {
+		// Redirect regardless of server response — cookie expiry handles cleanup
 		await apiDelete('/api/auth');
 		await goto('/');
 	}
@@ -16,9 +19,34 @@
 	function isActive(path) {
 		return currentPath === path || currentPath.startsWith(path + '/');
 	}
+
+	// Focus trap: wrap Tab within the sidebar when open on mobile
+	function handleKeydown(e) {
+		if (e.key !== 'Tab' || !open || !navEl) return;
+		const focusable = navEl.querySelectorAll('a[href], button:not([disabled])');
+		if (focusable.length === 0) return;
+		const first = focusable[0];
+		const last = focusable[focusable.length - 1];
+		if (e.shiftKey && document.activeElement === first) {
+			e.preventDefault();
+			last.focus();
+		} else if (!e.shiftKey && document.activeElement === last) {
+			e.preventDefault();
+			first.focus();
+		}
+	}
+
+	// Move focus into sidebar when it opens
+	$effect(() => {
+		if (open && navEl) {
+			const first = navEl.querySelector('a[href], button:not([disabled])');
+			first?.focus();
+		}
+	});
 </script>
 
-<nav class="admin-nav">
+<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+<nav id="admin-sidebar" class="admin-nav" class:open {inert} bind:this={navEl} onkeydown={handleKeydown} onclick={(e) => e.target.closest('a') && onlinkclick?.()}>
 	<div class="nav-header">
 		<a href="/" class="nav-logo">Gaylon Photos</a>
 		<span class="nav-badge">Admin</span>
@@ -155,5 +183,22 @@
 	.nav-footer {
 		margin-top: auto;
 		padding-top: 16px;
+	}
+
+	@media (max-width: 1024px) {
+		.admin-nav {
+			position: fixed;
+			top: 0;
+			left: 0;
+			z-index: 200;
+			height: 100vh;
+			transform: translateX(-100%);
+			transition: transform 0.25s ease;
+			box-shadow: none;
+		}
+		.admin-nav.open {
+			transform: translateX(0);
+			box-shadow: 4px 0 12px rgba(0, 0, 0, 0.1);
+		}
 	}
 </style>

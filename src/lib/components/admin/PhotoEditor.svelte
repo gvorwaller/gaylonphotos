@@ -80,13 +80,15 @@
 <div class="editor">
 	<div class="editor-preview">
 		<img src={photo.thumbnail} alt={photo.filename} />
-		<div class="editor-filename">{photo.filename}</div>
-		<div class="editor-gps">
-			{#if photo.gps}
-				<span class="gps-tagged">GPS: {photo.gps.lat.toFixed(4)}, {photo.gps.lng.toFixed(4)}</span>
-			{:else}
-				<span class="gps-untagged">No GPS</span>
-			{/if}
+		<div class="editor-meta">
+			<div class="editor-filename">{photo.filename}</div>
+			<div class="editor-gps">
+				{#if photo.gps}
+					<span class="gps-tagged">GPS: {photo.gps.lat.toFixed(4)}, {photo.gps.lng.toFixed(4)}</span>
+				{:else}
+					<span class="gps-untagged">No GPS</span>
+				{/if}
+			</div>
 		</div>
 	</div>
 
@@ -167,6 +169,9 @@
 		object-fit: cover;
 		border-radius: var(--radius-sm);
 	}
+	.editor-meta {
+		min-width: 0;
+	}
 	.editor-filename {
 		font-size: 0.7rem;
 		color: var(--color-text-muted);
@@ -231,5 +236,22 @@
 		color: #fff;
 		opacity: 0.7;
 		cursor: default;
+	}
+
+	@media (max-width: 1024px) {
+		.editor {
+			flex-direction: column;
+		}
+		.editor-preview {
+			width: 100%;
+			display: flex;
+			align-items: center;
+			gap: 12px;
+		}
+		.editor-preview img {
+			width: 64px;
+			height: 64px;
+			flex-shrink: 0;
+		}
 	}
 </style>

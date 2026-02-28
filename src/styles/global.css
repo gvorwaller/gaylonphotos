@@ -197,3 +197,9 @@ img {
   justify-content: flex-end;
   gap: 8px;
 }
+
+/* ─── Google Places Autocomplete ─────────────── */
+/* Ensure dropdown renders above sidebar/map on mobile */
+.pac-container {
+  z-index: 2100 !important;
+}
