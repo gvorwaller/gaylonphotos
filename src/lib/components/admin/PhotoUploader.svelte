@@ -35,7 +35,11 @@
 		for (const item of items) {
 			if (item.type.startsWith('image/')) {
 				const file = item.getAsFile();
-				if (file) files.push(file);
+				if (file) {
+					// Clone immediately — iOS invalidates clipboard File data after
+					// the paste handler returns, breaking the async fetch/FormData.
+					files.push(new File([file], file.name || 'pasted-image.jpg', { type: file.type }));
+				}
 			}
 		}
 		if (files.length > 0) {

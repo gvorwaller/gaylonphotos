@@ -20,7 +20,7 @@ ssh "$REMOTE" "cd $APP_DIR \
   && npm install \
   && npm run build \
   && npm prune --omit=dev \
-  && pm2 restart gaylonphotos"
+  && pm2 restart ecosystem.config.cjs --update-env"
 
 # Wait for app to boot, then verify
 echo "Waiting for app to start..."
