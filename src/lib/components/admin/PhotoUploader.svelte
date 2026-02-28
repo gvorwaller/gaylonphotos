@@ -29,10 +29,6 @@
 
 	function handlePaste(e) {
 		if (uploading) return;
-		// Skip if user is typing in an input or textarea
-		const active = document.activeElement;
-		if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) return;
-
 		const items = e.clipboardData?.items;
 		if (!items) return;
 		const files = [];
@@ -46,6 +42,12 @@
 			e.preventDefault();
 			uploadFiles(files);
 		}
+	}
+
+	// Block all text/content insertion into the contenteditable drop zone.
+	// This keeps it editable (so iOS shows "Paste" on long-press) but empty.
+	function blockInput(e) {
+		e.preventDefault();
 	}
 
 	function handleFileInput(e) {
@@ -98,11 +100,15 @@
 	<div
 		class="drop-zone"
 		class:dragover
+		contenteditable="true"
+		role="button"
 		ondragover={handleDragOver}
 		ondragleave={handleDragLeave}
 		ondrop={handleDrop}
+		onpaste={handlePaste}
+		onbeforeinput={blockInput}
 	>
-		<p>Drag & drop photos here, or paste from clipboard</p>
+		<p>Drag & drop photos here, or long-press to paste</p>
 		<span>or</span>
 		<label class="btn btn-outline btn-sm">
 			Browse Files
@@ -142,8 +148,6 @@
 	{/if}
 </div>
 
-<svelte:window onpaste={handlePaste} />
-
 <style>
 	.drop-zone {
 		border: 2px dashed var(--color-border);
@@ -152,6 +156,10 @@
 		text-align: center;
 		transition: border-color 0.15s, background 0.15s;
 		cursor: pointer;
+		caret-color: transparent;
+		-webkit-user-select: none;
+		user-select: none;
+		outline: none;
 	}
 	.drop-zone.dragover {
 		border-color: var(--color-primary);
