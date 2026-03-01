@@ -1,7 +1,6 @@
 <script>
 	import PhotoUploader from '$lib/components/admin/PhotoUploader.svelte';
 	import PhotoEditor from '$lib/components/admin/PhotoEditor.svelte';
-	import { invalidateAll } from '$app/navigation';
 
 	let { data } = $props();
 
@@ -13,13 +12,16 @@
 	});
 
 	function handleUploaded(photo) {
-		// Add the _collection field for PhotoEditor to use
-		photo._collection = data.collection.slug;
-		photos = [...photos, photo];
+		const idx = photos.findIndex((p) => p.id === photo.id);
+		if (idx >= 0) {
+			photos = photos.map((p) => p.id === photo.id ? photo : p);
+		} else {
+			photos = [...photos, photo];
+		}
 	}
 
 	function handleUpdated(updatedPhoto) {
-		photos = photos.map((p) => p.id === updatedPhoto.id ? { ...updatedPhoto, _collection: data.collection.slug } : p);
+		photos = photos.map((p) => p.id === updatedPhoto.id ? updatedPhoto : p);
 	}
 
 	function handleDeleted(photoId) {
@@ -57,8 +59,10 @@
 			<div class="photo-list">
 				{#each photos as photo (photo.id)}
 					<PhotoEditor
-						photo={{ ...photo, _collection: data.collection.slug }}
+						{photo}
+						collectionSlug={data.collection.slug}
 						collectionType={data.collection.type}
+						apiKey={data.googleMapsApiKey}
 						onupdated={handleUpdated}
 						ondeleted={() => handleDeleted(photo.id)}
 					/>

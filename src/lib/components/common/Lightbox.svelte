@@ -78,6 +78,9 @@
 				<p class="lightbox-desc">{displayPhoto.description}</p>
 			{/if}
 			<div class="lightbox-meta">
+				{#if displayPhoto.locationName}
+					<span>{displayPhoto.locationName}</span>
+				{/if}
 				{#if displayPhoto.date}
 					<span>{formatDate(displayPhoto.date)}</span>
 				{/if}

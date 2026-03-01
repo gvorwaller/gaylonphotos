@@ -28,7 +28,11 @@
 		if (photo.aperture) items.push({ label: 'Aperture', value: photo.aperture });
 		if (photo.shutterSpeed) items.push({ label: 'Shutter', value: photo.shutterSpeed });
 		if (photo.iso) items.push({ label: 'ISO', value: String(photo.iso) });
-		if (photo.gps) items.push({ label: 'GPS', value: `${photo.gps.lat.toFixed(4)}, ${photo.gps.lng.toFixed(4)}` });
+		if (photo.locationName) {
+			items.push({ label: 'Location', value: photo.locationName });
+		} else if (photo.gps) {
+			items.push({ label: 'GPS', value: `${photo.gps.lat.toFixed(4)}, ${photo.gps.lng.toFixed(4)}` });
+		}
 		if (photo.species) items.push({ label: 'Species', value: photo.species });
 		if (photo.spot) items.push({ label: 'Spot', value: photo.spot });
 		if (photo.conditions) items.push({ label: 'Conditions', value: photo.conditions });

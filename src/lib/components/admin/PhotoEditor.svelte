@@ -1,12 +1,35 @@
 <script>
 	/**
 	 * Inline photo metadata editor.
-	 * Props: photo, collectionType, onupdated, ondeleted
+	 * Props: photo, collectionSlug, collectionType, apiKey, onupdated, ondeleted
 	 */
 	import { apiPut, apiDelete } from '$lib/api.js';
+	import { reverseGeocode } from '$lib/geocoding.js';
 	import Modal from '$lib/components/common/Modal.svelte';
 
-	let { photo, collectionType = 'travel', onupdated = null, ondeleted = null } = $props();
+	let { photo, collectionSlug = '', collectionType = 'travel', apiKey = '', onupdated = null, ondeleted = null } = $props();
+
+	// Track whether we've already geocoded this photo to prevent re-firing (intentionally not $state)
+	let hasGeocoded = false;
+	let resolvedLocationName = $state(null);
+
+	$effect(() => {
+		const id = photo.id;
+		const slug = collectionSlug;
+		if (photo.gps && !photo.locationName && apiKey && slug && !hasGeocoded) {
+			hasGeocoded = true;
+			const { lat, lng } = photo.gps;
+			reverseGeocode(lat, lng, apiKey).then((name) => {
+				if (name && photo.id === id) {
+					resolvedLocationName = name;
+					// Persist silently — don't call onupdated to avoid resetting unsaved form edits
+					apiPut('/api/photos', { collection: slug, photoId: id, updates: { locationName: name } });
+				}
+			}).catch((err) => console.warn('Geocode backfill failed:', err));
+		}
+	});
+
+	let displayLocation = $derived(photo.locationName || resolvedLocationName);
 
 	let description = $state('');
 	let tagsStr = $state('');
@@ -47,7 +70,7 @@
 		}
 
 		const result = await apiPut('/api/photos', {
-			collection: photo.collection || photo._collection,
+			collection: collectionSlug,
 			photoId: photo.id,
 			updates
 		});
@@ -64,7 +87,7 @@
 
 	async function confirmDelete() {
 		const result = await apiDelete('/api/photos', {
-			collection: photo.collection || photo._collection,
+			collection: collectionSlug,
 			photoId: photo.id
 		});
 
@@ -83,7 +106,9 @@
 		<div class="editor-meta">
 			<div class="editor-filename">{photo.filename}</div>
 			<div class="editor-gps">
-				{#if photo.gps}
+				{#if displayLocation}
+					<span class="gps-tagged">{displayLocation}</span>
+				{:else if photo.gps}
 					<span class="gps-tagged">GPS: {photo.gps.lat.toFixed(4)}, {photo.gps.lng.toFixed(4)}</span>
 				{:else}
 					<span class="gps-untagged">No GPS</span>

@@ -1,0 +1,111 @@
+/**
+ * Client-side reverse geocoding using Google Maps Geocoder.
+ * Requires the Geocoding API to be enabled in the Google Cloud project.
+ */
+
+let loadPromise = null;
+let geocoderInstance = null;
+
+/**
+ * Ensures the Google Maps JS API is loaded. Returns immediately if already
+ * available, otherwise injects the script tag and waits. Prevents duplicate loads.
+ */
+export function ensureGoogleMapsLoaded(apiKey) {
+	if (typeof window === 'undefined') return Promise.reject(new Error('Not in browser'));
+
+	if (window.google?.maps) return Promise.resolve();
+
+	if (loadPromise) return loadPromise;
+
+	// Check if a script tag already exists (e.g. from Map.svelte)
+	if (document.querySelector('script[src*="maps.googleapis.com"]')) {
+		loadPromise = new Promise((resolve, reject) => {
+			const timeout = setTimeout(() => {
+				clearInterval(check);
+				loadPromise = null;
+				reject(new Error('Google Maps API load timeout'));
+			}, 30000);
+			const check = setInterval(() => {
+				if (window.google?.maps) {
+					clearInterval(check);
+					clearTimeout(timeout);
+					resolve();
+				}
+			}, 100);
+		});
+		return loadPromise;
+	}
+
+	loadPromise = new Promise((resolve, reject) => {
+		const script = document.createElement('script');
+		script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=marker,places`;
+		script.async = true;
+		script.onload = () => {
+			if (window.google?.maps) {
+				resolve();
+			} else {
+				// Script loaded but API failed to initialize
+				loadPromise = null;
+				reject(new Error('Google Maps API loaded but not initialized'));
+			}
+		};
+		script.onerror = () => {
+			loadPromise = null;
+			reject(new Error('Failed to load Google Maps API'));
+		};
+		document.head.appendChild(script);
+	});
+
+	return loadPromise;
+}
+
+/**
+ * Reverse-geocode lat/lng into a human-readable place name.
+ * Returns null on failure (silently — geocoding errors shouldn't block UI).
+ *
+ * Formatting: "{city}, {country}" for international, "{city}, {state}" for US.
+ * Falls back through locality > sublocality > natural_feature > admin_area_2 > admin_area_1.
+ */
+export async function reverseGeocode(lat, lng, apiKey) {
+	try {
+		await ensureGoogleMapsLoaded(apiKey);
+
+		if (!geocoderInstance) {
+			geocoderInstance = new window.google.maps.Geocoder();
+		}
+		const response = await geocoderInstance.geocode({ location: { lat, lng } });
+
+		if (!response.results?.length) return null;
+
+		const components = response.results[0].address_components;
+		if (!components) return null;
+
+		const get = (type) => components.find((c) => c.types.includes(type))?.long_name || null;
+		const getShort = (type) => components.find((c) => c.types.includes(type))?.short_name || null;
+
+		const country = get('country');
+		const state = get('administrative_area_level_1');
+		const stateShort = getShort('administrative_area_level_1');
+		const city =
+			get('locality') ||
+			get('sublocality') ||
+			get('natural_feature') ||
+			get('administrative_area_level_2') ||
+			state;
+
+		if (!city) return response.results[0].formatted_address || null;
+
+		// US locations: "City, ST"; international: "City, Country"
+		if (country === 'United States' && stateShort) {
+			if (city === state) return stateShort;
+			return `${city}, ${stateShort}`;
+		}
+		if (country && city !== country) {
+			return `${city}, ${country}`;
+		}
+
+		return city;
+	} catch {
+		return null;
+	}
+}

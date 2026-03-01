@@ -7,13 +7,17 @@
 	 * Props: collectionSlug, photos (untagged), allPhotos, apiKey
 	 */
 	import GoogleMap from '$lib/components/common/Map.svelte';
-	import { apiPost } from '$lib/api.js';
+	import { apiPost, apiPut } from '$lib/api.js';
+	import { reverseGeocode } from '$lib/geocoding.js';
 
 	let { collectionSlug, photos = [], allPhotos = [], apiKey = '' } = $props();
 
 	// Working copies — photos move from untagged to tagged as they're assigned
 	let untaggedPhotos = $state([]);
 	let selectedIds = $state(new Set());
+	let pendingCoords = $state(null);
+	let assigning = $state(false);
+	let error = $state('');
 
 	// Re-sync when navigating to a different collection's geotag page
 	$effect(() => {
@@ -21,9 +25,6 @@
 		selectedIds = new Set();
 		pendingCoords = null;
 	});
-	let pendingCoords = $state(null);
-	let assigning = $state(false);
-	let error = $state('');
 
 	// Place search
 	let searchInput;
@@ -60,10 +61,8 @@
 				mapInstance.setZoom(14);
 			}
 
-			// Set as pending coords (same as clicking the map)
-			if (selectedIds.size > 0) {
-				pendingCoords = { lat, lng };
-			}
+			// Set as pending coords — assign button is gated on both selection + coords
+			pendingCoords = { lat, lng };
 		});
 	});
 
@@ -128,8 +127,9 @@
 		assigning = true;
 		error = '';
 
+		const slug = collectionSlug;
 		const result = await apiPost('/api/geotag', {
-			collection: collectionSlug,
+			collection: slug,
 			photoIds: [...selectedIds],
 			lat: pendingCoords.lat,
 			lng: pendingCoords.lng
@@ -138,10 +138,32 @@
 		assigning = false;
 
 		if (result.ok) {
+			// Capture state before resetting
+			const assignedIds = [...selectedIds];
+			const coords = pendingCoords;
+
 			// Remove assigned photos from untagged list
 			untaggedPhotos = untaggedPhotos.filter((p) => !selectedIds.has(p.id));
 			selectedIds = new Set();
 			pendingCoords = null;
+
+			// Backfill locationName in the background
+			if (apiKey && coords) {
+				reverseGeocode(coords.lat, coords.lng, apiKey).then(async (name) => {
+					if (name) {
+						for (const photoId of assignedIds) {
+							const putResult = await apiPut('/api/photos', {
+								collection: slug,
+								photoId,
+								updates: { locationName: name }
+							});
+							if (!putResult.ok) {
+								console.warn(`Failed to set locationName for ${photoId}:`, putResult.error);
+							}
+						}
+					}
+				}).catch((err) => console.warn('Background geocode failed:', err));
+			}
 		} else {
 			error = result.error;
 		}
