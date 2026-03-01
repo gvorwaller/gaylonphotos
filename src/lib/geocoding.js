@@ -60,11 +60,35 @@ export function ensureGoogleMapsLoaded(apiKey) {
 }
 
 /**
+ * Google Plus Codes use only these characters: 23456789CFGHJMPQRVWX
+ * Filter them out — they're not human-readable place names.
+ */
+const PLUS_CODE_RE = /^[23456789CFGHJMPQRVWX]+\+[23456789CFGHJMPQRVWX]*$/;
+
+function isPlusCode(str) {
+	return PLUS_CODE_RE.test(str);
+}
+
+/**
+ * Search across all geocoder results for a specific address component type.
+ * The first result is the most specific, but may lack certain components
+ * that appear in broader results.
+ */
+function findComponent(results, type) {
+	for (const result of results) {
+		const comp = result.address_components?.find((c) => c.types.includes(type));
+		if (comp) return comp;
+	}
+	return null;
+}
+
+/**
  * Reverse-geocode lat/lng into a human-readable place name.
  * Returns null on failure (silently — geocoding errors shouldn't block UI).
  *
+ * Priority: point_of_interest/park > locality > sublocality > natural_feature > admin_area_2 > admin_area_1.
  * Formatting: "{city}, {country}" for international, "{city}, {state}" for US.
- * Falls back through locality > sublocality > natural_feature > admin_area_2 > admin_area_1.
+ * Filters out Google Plus Codes.
  */
 export async function reverseGeocode(lat, lng, apiKey) {
 	try {
@@ -77,11 +101,18 @@ export async function reverseGeocode(lat, lng, apiKey) {
 
 		if (!response.results?.length) return null;
 
-		const components = response.results[0].address_components;
+		const results = response.results;
+		const components = results[0].address_components;
 		if (!components) return null;
 
 		const get = (type) => components.find((c) => c.types.includes(type))?.long_name || null;
 		const getShort = (type) => components.find((c) => c.types.includes(type))?.short_name || null;
+
+		// Check for specific venue/park/POI in any result
+		const poi = findComponent(results, 'point_of_interest') ||
+			findComponent(results, 'park') ||
+			findComponent(results, 'establishment');
+		const poiName = poi?.long_name || null;
 
 		const country = get('country');
 		const state = get('administrative_area_level_1');
@@ -93,15 +124,30 @@ export async function reverseGeocode(lat, lng, apiKey) {
 			get('administrative_area_level_2') ||
 			state;
 
-		if (!city) return response.results[0].formatted_address || null;
-
-		// US locations: "City, ST"; international: "City, Country"
+		// Build the region suffix: "ST" for US, "Country" for international
+		let region = null;
 		if (country === 'United States' && stateShort) {
-			if (city === state) return stateShort;
-			return `${city}, ${stateShort}`;
+			region = stateShort;
+		} else if (country) {
+			region = country;
 		}
-		if (country && city !== country) {
-			return `${city}, ${country}`;
+
+		// If we found a POI/park, use it: "Huguenot Memorial Park, FL"
+		if (poiName && region && poiName !== city) {
+			return `${poiName}, ${region}`;
+		}
+
+		if (!city) {
+			// Last resort: formatted_address, but filter out Plus Codes
+			const formatted = results[0].formatted_address;
+			if (formatted && !isPlusCode(formatted.split(',')[0].trim())) {
+				return formatted;
+			}
+			return null;
+		}
+
+		if (region && city !== country && city !== state) {
+			return `${city}, ${region}`;
 		}
 
 		return city;
