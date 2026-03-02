@@ -6,7 +6,7 @@
 	 * Props:
 	 *   center: { lat, lng } — initial center
 	 *   zoom: number — initial zoom (default: 10)
-	 *   markers: Array<{ lat, lng, id, label?, color? }> — markers to display
+	 *   markers: Array<{ lat, lng, id, label?, color?, shape? }> — markers to display
 	 *   polyline: Array<{ lat, lng }> | null — route line
 	 *   clickable: boolean — if true, dispatches onmapclick (default: false)
 	 *   apiKey: string — Google Maps API key
@@ -37,16 +37,28 @@
 	let initialFitDone = false; // Not reactive — one-shot flag read inside effect
 
 	/**
-	 * Creates a colored circle DOM element for AdvancedMarkerElement content.
+	 * Creates a colored marker DOM element for AdvancedMarkerElement content.
+	 * shape: 'circle' (default) or 'diamond' for ancestry markers.
 	 */
-	function createColoredMarkerElement(color) {
+	function createColoredMarkerElement(color, shape = 'circle') {
 		const div = document.createElement('div');
-		div.style.width = '16px';
-		div.style.height = '16px';
-		div.style.borderRadius = '50%';
-		div.style.backgroundColor = color;
-		div.style.border = '2px solid #fff';
-		div.style.boxShadow = '0 1px 3px rgba(0,0,0,0.4)';
+		if (shape === 'diamond') {
+			div.style.width = '14px';
+			div.style.height = '14px';
+			div.style.backgroundColor = color;
+			div.style.border = '2px solid #fff';
+			div.style.boxShadow = '0 1px 3px rgba(0,0,0,0.4)';
+			div.style.transform = 'rotate(45deg)';
+			div.style.cursor = 'pointer';
+		} else {
+			div.style.width = '16px';
+			div.style.height = '16px';
+			div.style.borderRadius = '50%';
+			div.style.backgroundColor = color;
+			div.style.border = '2px solid #fff';
+			div.style.boxShadow = '0 1px 3px rgba(0,0,0,0.4)';
+			div.style.cursor = 'pointer';
+		}
 		return div;
 	}
 
@@ -72,7 +84,7 @@
 		}
 
 		const script = document.createElement('script');
-		script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=marker,places`;
+		script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&libraries=marker,places`;
 		script.async = true;
 		script.onload = () => { apiLoaded = true; };
 		script.onerror = () => { console.error('Failed to load Google Maps API'); };
@@ -136,7 +148,7 @@
 				position: { lat: m.lat, lng: m.lng },
 				map,
 				title: m.label || '',
-				...(m.color ? { content: createColoredMarkerElement(m.color) } : {})
+				...(m.color ? { content: createColoredMarkerElement(m.color, m.shape) } : {})
 			});
 
 			if (onmarkerclick) {

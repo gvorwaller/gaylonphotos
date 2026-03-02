@@ -1,4 +1,4 @@
-import { readFile, writeFile, rename, mkdir } from 'node:fs/promises';
+import { readFile, writeFile, rename, mkdir, unlink } from 'node:fs/promises';
 
 /**
  * Per-file Promise chain for serializing writes.
@@ -102,6 +102,22 @@ export async function createJsonIfNotExists(filePath, data) {
 		const tmpPath = filePath + '.tmp';
 		await writeFile(tmpPath, serialized, 'utf-8');
 		await rename(tmpPath, filePath);
+	});
+}
+
+/**
+ * Delete a JSON file, serialized through the per-file lock.
+ * Ignores ENOENT (file already absent).
+ * @param {string} filePath
+ * @returns {Promise<void>}
+ */
+export async function deleteJson(filePath) {
+	return withLock(filePath, async () => {
+		try {
+			await unlink(filePath);
+		} catch (err) {
+			if (err.code !== 'ENOENT') throw err;
+		}
 	});
 }
 

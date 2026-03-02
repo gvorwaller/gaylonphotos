@@ -66,6 +66,13 @@ img {
   --shadow-btn-primary: 0 2px 8px rgba(40, 167, 69, 0.25);
   --shadow-btn-primary-hover: 0 4px 14px rgba(40, 167, 69, 0.35);
 
+  /* Ancestry / Family Heritage */
+  --color-line-paternal: #8B5CF6;
+  --color-line-maternal: #D97706;
+  --color-line-self: #6c757d;
+  --color-line-both: #059669;
+  --color-ancestry-marker: #8B5CF6;
+
   /* Layout */
   --container-max: 1200px;
   --nav-height: 56px;

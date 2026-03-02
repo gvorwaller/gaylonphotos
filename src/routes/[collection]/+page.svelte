@@ -2,6 +2,7 @@
 	import Gallery from '$lib/components/common/Gallery.svelte';
 	import ItineraryMap from '$lib/components/travel/ItineraryMap.svelte';
 	import Timeline from '$lib/components/travel/Timeline.svelte';
+	import AncestryPanel from '$lib/components/travel/AncestryPanel.svelte';
 	import SightingMap from '$lib/components/wildlife/SightingMap.svelte';
 	import SpeciesGrid from '$lib/components/wildlife/SpeciesGrid.svelte';
 	import SpotGallery from '$lib/components/action/SpotGallery.svelte';
@@ -11,6 +12,7 @@
 	let filterSpecies = $state(null);
 	let mapBounds = $state(null);
 	let mapFilterActive = $state(false);
+	let showAncestryOnMap = $state(false);
 	let prevSlug; // Plain let, not $state — must not trigger effect re-runs
 
 	// Reset filters when navigating between collections (not on data invalidation)
@@ -20,6 +22,7 @@
 			filterSpecies = null;
 			mapBounds = null;
 			mapFilterActive = false;
+			showAncestryOnMap = false;
 		}
 		prevSlug = slug;
 	});
@@ -32,6 +35,7 @@
 		)
 	);
 	let hasGpsPhotos = $derived(data.photos.some((p) => p.gps));
+	let hasAncestry = $derived(data.ancestry?.persons?.length > 0);
 
 	function handleBoundsChange(bounds) {
 		mapBounds = bounds;
@@ -85,18 +89,38 @@
 	{#if data.collection.type === 'travel'}
 		{#if data.itinerary?.stops?.length > 0 || data.photos.some((p) => p.gps)}
 			<section style="margin-top: 32px;">
-				<h2 class="section-label">Journey</h2>
+				<div class="journey-header">
+					<h2 class="section-label">Journey</h2>
+					{#if hasAncestry}
+						<label class="ancestry-map-toggle">
+							<input type="checkbox" bind:checked={showAncestryOnMap} />
+							Show Family Heritage
+						</label>
+					{/if}
+				</div>
 				<ItineraryMap
 					photos={data.photos}
 					stops={data.itinerary?.stops ?? []}
 					apiKey={data.googleMapsApiKey}
 					onboundschange={handleBoundsChange}
+					ancestryPlaces={hasAncestry ? data.ancestry.places : []}
+					showAncestry={showAncestryOnMap}
 				/>
 			</section>
 
 			<section style="margin-top: 32px;">
 				<h2 class="section-label">Timeline</h2>
 				<Timeline photos={data.photos} stops={data.itinerary?.stops ?? []} collectionSlug={data.collection.slug} />
+			</section>
+		{/if}
+
+		{#if hasAncestry}
+			<section style="margin-top: 32px;">
+				<AncestryPanel
+					ancestry={data.ancestry}
+					collectionSlug={data.collection.slug}
+					{mapBounds}
+				/>
 			</section>
 		{/if}
 
@@ -196,6 +220,23 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: 12px;
+	}
+	.journey-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+	}
+	.ancestry-map-toggle {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		font-size: 0.8rem;
+		color: var(--color-text-muted);
+		cursor: pointer;
+		user-select: none;
+	}
+	.ancestry-map-toggle input[type='checkbox'] {
+		accent-color: var(--color-line-paternal);
 	}
 	.map-filter-hint {
 		color: var(--color-text-muted);

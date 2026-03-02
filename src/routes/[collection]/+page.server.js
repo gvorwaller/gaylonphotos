@@ -1,6 +1,7 @@
 import { getCollection } from '$lib/server/collections.js';
 import { listPhotos } from '$lib/server/photos.js';
 import { getItinerary } from '$lib/server/itinerary.js';
+import { getAncestry } from '$lib/server/ancestry.js';
 import { error } from '@sveltejs/kit';
 
 /** @type {import('./$types').PageServerLoad} */
@@ -12,11 +13,15 @@ export async function load({ params }) {
 
 	const photos = await listPhotos(params.collection);
 
-	// Load itinerary for travel collections
+	// Load itinerary and ancestry for travel collections
 	let itinerary = null;
+	let ancestry = null;
 	if (collection.type === 'travel') {
-		itinerary = await getItinerary(params.collection);
+		[itinerary, ancestry] = await Promise.all([
+			getItinerary(params.collection),
+			getAncestry(params.collection)
+		]);
 	}
 
-	return { collection, photos, itinerary };
+	return { collection, photos, itinerary, ancestry };
 }
