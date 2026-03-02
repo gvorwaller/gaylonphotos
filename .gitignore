@@ -7,6 +7,10 @@ build/
 
 # Generated data
 data/admin.json
+data/*/ancestry.json
+
+# Test data
+test-data/
 
 # Source photos (large binaries — don't commit)
 /photos/

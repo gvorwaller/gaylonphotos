@@ -270,6 +270,29 @@ export function parseGedcom(text) {
 		currentRecord.data.facts.push({ ...currentEvent });
 	}
 
+	// Post-parse: derive FAMC/FAMS from FAM records to handle GEDCOM files
+	// that only define relationships in FAM records (not on INDI records).
+	for (const [famId, fam] of families) {
+		for (const childId of fam.children) {
+			const child = individuals.get(childId);
+			if (child && !child.familyChild) {
+				child.familyChild = famId;
+			}
+		}
+		if (fam.husband) {
+			const husb = individuals.get(fam.husband);
+			if (husb && !husb.familySpouse.includes(famId)) {
+				husb.familySpouse.push(famId);
+			}
+		}
+		if (fam.wife) {
+			const wife = individuals.get(fam.wife);
+			if (wife && !wife.familySpouse.includes(famId)) {
+				wife.familySpouse.push(famId);
+			}
+		}
+	}
+
 	return { individuals, families };
 }
 
