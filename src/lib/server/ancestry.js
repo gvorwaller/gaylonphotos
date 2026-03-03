@@ -208,7 +208,7 @@ export function parseGedcom(text) {
 					currentRecord.data.familyChild = value;
 				} else if (tag === 'FAMS') {
 					currentRecord.data.familySpouse.push(value);
-				} else if (tag === '_FSFTID') {
+				} else if (tag === '_FSFTID' || tag === '_FID') {
 					currentRecord.data.fsId = value;
 				} else if (EVENT_TAGS[tag]) {
 					currentEvent = { tag, type: EVENT_TAGS[tag], date: null, place: null, year: null };
@@ -247,8 +247,8 @@ export function parseGedcom(text) {
 				const sep = tag === 'CONT' ? '\n' : '';
 				currentRecord.data.name = (currentRecord.data.name + sep + value).replace(/\//g, '').trim();
 			}
-			// _FSFTID on INDI (some GEDCOM exporters put it at level 2)
-			if (tag === '_FSFTID' && currentRecord.type === 'INDI') {
+			// _FSFTID / _FID on INDI (some GEDCOM exporters put it at level 2)
+			if ((tag === '_FSFTID' || tag === '_FID') && currentRecord.type === 'INDI') {
 				currentRecord.data.fsId = value;
 			}
 		}
@@ -888,9 +888,10 @@ export async function importGedcom(collectionSlug, gedcomText, rootPersonId, max
 	// Only geocode places we don't already have
 	const placesToGeocode = [...placeNames].filter((name) => !existingPlaceNames.has(name));
 
-	// Cap unique places to keep geocoding within HTTP timeout (~110s at 1.1s/req)
-	if (placesToGeocode.length > 100) {
-		throw new Error(`Too many unique new places (${placesToGeocode.length}). Maximum is 100. Try reducing maxGenerations.`);
+	// Cap unique places (~440s at 1.1s/req). Requires Node requestTimeout >440s
+	// and Nginx proxy_read_timeout >440s (default 60s — must be increased).
+	if (placesToGeocode.length > 400) {
+		throw new Error(`Too many unique new places (${placesToGeocode.length}). Maximum is 400. Try reducing maxGenerations.`);
 	}
 
 	// Geocode only new places

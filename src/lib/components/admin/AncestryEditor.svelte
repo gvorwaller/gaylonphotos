@@ -11,6 +11,84 @@
 	let localAncestry = $state(null);
 	let loaded = $state(false);
 
+	// --- Client-side GEDCOM person list parser ---
+	// Intentionally simplified regex vs server's parseGedcom — only needs names/births for UI picker.
+	// Server regex separates xref + tag; this regex treats the first token as tag (works because
+	// level 0 records are detected via `value === 'INDI' && tag.startsWith('@')`).
+	function parseGedcomPersonList(text) {
+		text = text.replace(/^\uFEFF/, '');
+		const persons = [];
+		let currentId = null;
+		let name = null;
+		let birthYear = null;
+		let birthPlace = null;
+		let inBirt = false;
+
+		const lines = text.split(/\r?\n/);
+		for (const line of lines) {
+			const match = line.match(/^(\d+)\s+(@\S+@|\S+)\s?(.*)?$/);
+			if (!match) continue;
+
+			const level = parseInt(match[1], 10);
+			const tag = match[2];
+			const value = (match[3] || '').trim();
+
+			if (level === 0) {
+				// Flush previous record
+				if (currentId && name) {
+					persons.push({ id: currentId, name, birthYear, birthPlace });
+				}
+				currentId = null;
+				name = null;
+				birthYear = null;
+				birthPlace = null;
+				inBirt = false;
+
+				if (value === 'INDI' && tag.startsWith('@')) {
+					currentId = tag;
+				}
+				continue;
+			}
+
+			if (!currentId) continue;
+
+			if (level === 1) {
+				inBirt = false;
+				if (tag === 'NAME') {
+					const surname = value.match(/\/(.+?)\//);
+					name = surname
+						? `${value.replace(/\/.*?\//, '').trim()} ${surname[1]}`.trim()
+						: value.replace(/\//g, '').trim();
+				} else if (tag === 'BIRT') {
+					inBirt = true;
+				}
+			} else if (level === 2 && inBirt) {
+				if (tag === 'DATE') {
+					const yr = value.match(/\b(\d{4})\b/);
+					if (yr) birthYear = parseInt(yr[1], 10);
+				} else if (tag === 'PLAC') {
+					birthPlace = value;
+				}
+			}
+		}
+		// Flush last record
+		if (currentId && name) {
+			persons.push({ id: currentId, name, birthYear, birthPlace });
+		}
+
+		persons.sort((a, b) => a.name.localeCompare(b.name));
+		return persons;
+	}
+
+	function readFileAsText(file) {
+		return new Promise((resolve, reject) => {
+			const reader = new FileReader();
+			reader.onload = () => resolve(reader.result);
+			reader.onerror = () => reject(reader.error);
+			reader.readAsText(file);
+		});
+	}
+
 	// Sync from prop on initial load (or after re-mount on navigation)
 	$effect(() => {
 		if (!loaded && ancestry !== null) {
@@ -21,21 +99,123 @@
 	});
 
 	// --- Import mode state ---
-	let rootPersonId = $state('I1');
+	let rootPersonId = $state('');
 	let maxGenerations = $state(8);
 	let importing = $state(false);
 	let importError = $state('');
 	let geocodeReport = $state(null);
 	let selectedFile = $state(null);
+	let personList = $state([]);
+	let personSearch = $state('');
+	let showPersonDropdown = $state(false);
+	let scanningFile = $state(false);
+	let importFileGen = 0;
+
+	// Parse persons from import file (generation counter guards against stale async results)
+	$effect(() => {
+		const file = selectedFile;
+		const gen = ++importFileGen;
+		if (!file) {
+			personList = [];
+			personSearch = '';
+			rootPersonId = '';
+			scanningFile = false;
+			return;
+		}
+		scanningFile = true;
+		readFileAsText(file).then((text) => {
+			if (gen !== importFileGen) return;
+			personList = parseGedcomPersonList(text);
+			scanningFile = false;
+		}).catch(() => {
+			if (gen !== importFileGen) return;
+			personList = [];
+			scanningFile = false;
+			importError = 'Could not read the GEDCOM file';
+		});
+	});
 
 	// --- Merge mode state ---
 	let mergeMode = $state(false);
 	let mergeFile = $state(null);
-	let mergeRootId = $state('I1');
+	let mergeRootId = $state('');
+	let mergePersonList = $state([]);
+	let mergePersonSearch = $state('');
+	let showMergePersonDropdown = $state(false);
+	let scanningMergeFile = $state(false);
+	let mergeFileGen = 0;
+
+	// Parse persons from merge file (generation counter guards against stale async results)
+	$effect(() => {
+		const file = mergeFile;
+		const gen = ++mergeFileGen;
+		if (!file) {
+			mergePersonList = [];
+			mergePersonSearch = '';
+			mergeRootId = '';
+			scanningMergeFile = false;
+			return;
+		}
+		scanningMergeFile = true;
+		readFileAsText(file).then((text) => {
+			if (gen !== mergeFileGen) return;
+			mergePersonList = parseGedcomPersonList(text);
+			scanningMergeFile = false;
+		}).catch(() => {
+			if (gen !== mergeFileGen) return;
+			mergePersonList = [];
+			scanningMergeFile = false;
+			mergeError = 'Could not read the GEDCOM file';
+		});
+	});
 	let mergeMaxGen = $state(8);
 	let merging = $state(false);
 	let mergeError = $state('');
 	let mergeReport = $state(null);
+
+	// Filtered person lists for dropdowns
+	let filteredPersons = $derived.by(() => {
+		if (!personSearch) return personList.slice(0, 50);
+		const q = personSearch.toLowerCase();
+		return personList.filter((p) =>
+			p.name.toLowerCase().includes(q) ||
+			p.id.toLowerCase().includes(q) ||
+			(p.birthPlace && p.birthPlace.toLowerCase().includes(q))
+		).slice(0, 50);
+	});
+
+	let filteredMergePersons = $derived.by(() => {
+		if (!mergePersonSearch) return mergePersonList.slice(0, 50);
+		const q = mergePersonSearch.toLowerCase();
+		return mergePersonList.filter((p) =>
+			p.name.toLowerCase().includes(q) ||
+			p.id.toLowerCase().includes(q) ||
+			(p.birthPlace && p.birthPlace.toLowerCase().includes(q))
+		).slice(0, 50);
+	});
+
+	function selectPerson(person) {
+		rootPersonId = person.id;
+		personSearch = formatPersonLabel(person);
+		showPersonDropdown = false;
+	}
+
+	function selectMergePerson(person) {
+		mergeRootId = person.id;
+		mergePersonSearch = formatPersonLabel(person);
+		showMergePersonDropdown = false;
+	}
+
+	function formatPersonLabel(p) {
+		let label = p.name;
+		if (p.birthYear || p.birthPlace) {
+			const parts = [];
+			if (p.birthYear) parts.push(`b. ${p.birthYear}`);
+			if (p.birthPlace) parts.push(p.birthPlace.split(',')[0].trim());
+			label += ` (${parts.join(', ')})`;
+		}
+		return label;
+	}
 
 	// --- Management mode state ---
 	let saving = $state(false);
@@ -48,6 +228,7 @@
 	function handleFileInput(e) {
 		const file = e.target.files?.[0];
 		if (file) selectedFile = file;
+		e.target.value = '';
 	}
 
 	function handleDrop(e) {
@@ -119,6 +300,7 @@
 	function handleMergeFileInput(e) {
 		const file = e.target.files?.[0];
 		if (file) mergeFile = file;
+		e.target.value = '';
 	}
 
 	function handleMergeDrop(e) {
@@ -183,8 +365,8 @@
 		<section class="import-section">
 			<h2 class="subsection-title">Import GEDCOM</h2>
 			<p class="help-text">
-				Export a GEDCOM file from <a href="https://www.familysearch.org/innovate/export" target="_blank" rel="noopener">FamilySearch</a>,
-				then upload it here. Place names will be automatically geocoded.
+				Export a GEDCOM file from <a href="https://www.familysearch.org/innovate/export" target="_blank" rel="noopener">FamilySearch</a>
+				or MacFamilyTree, then upload it here. Place names will be automatically geocoded.
 			</p>
 
 			<!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -213,14 +395,61 @@
 			</div>
 
 			<div class="import-options">
-				<label class="field">
-					<span>Root Person ID</span>
-					<input type="text" bind:value={rootPersonId} placeholder="I1" />
-					<span class="field-hint">
-						The GEDCOM individual ID for yourself or the starting ancestor (e.g., I1).
-						Open the .ged file in a text editor to find it.
-					</span>
-				</label>
+				<div class="field">
+					<span>Root Person</span>
+					{#if scanningFile}
+						<div class="scanning-hint">Scanning file...</div>
+					{:else if personList.length > 0}
+						<!-- svelte-ignore a11y_no_static_element_interactions -->
+						<div class="person-picker" onkeydown={(e) => { if (e.key === 'Escape') showPersonDropdown = false; }}>
+							<input
+								type="text"
+								bind:value={personSearch}
+								placeholder="Search by name..."
+								onfocus={() => showPersonDropdown = true}
+								oninput={() => { showPersonDropdown = true; rootPersonId = ''; }}
+								onblur={() => { setTimeout(() => showPersonDropdown = false, 200); }}
+							/>
+							{#if rootPersonId}
+								<span class="picked-id">{rootPersonId}</span>
+							{/if}
+							{#if showPersonDropdown}
+								<div class="person-dropdown">
+									{#each filteredPersons as person (person.id)}
+										<button
+											type="button"
+											class="person-option"
+											onmousedown={() => selectPerson(person)}
+										>
+											<span class="option-name">{person.name}</span>
+											{#if person.birthYear || person.birthPlace}
+												<span class="option-detail">
+													{person.birthYear ? `b. ${person.birthYear}` : ''}
+													{person.birthPlace ? person.birthPlace.split(',')[0].trim() : ''}
+												</span>
+											{/if}
+											<span class="option-id">{person.id}</span>
+										</button>
+									{/each}
+									{#if filteredPersons.length === 0}
+										<div class="no-results">No matches</div>
+									{/if}
+									{#if personList.length > 50 && !personSearch}
+										<div class="dropdown-hint">{personList.length} persons — type to filter</div>
+									{/if}
+								</div>
+							{/if}
+						</div>
+						<span class="field-hint">
+							Search for the starting person. {personList.length} individuals found.
+						</span>
+					{:else}
+						<input type="text" bind:value={rootPersonId} placeholder="@I1@" />
+						<span class="field-hint">
+							Select a GEDCOM file first, or enter the individual ID manually.
+						</span>
+					{/if}
+				</div>
 
 				<label class="field">
 					<span>Max Generations</span>
@@ -238,7 +467,7 @@
 			<button
 				class="btn btn-primary"
 				onclick={doImport}
-				disabled={!selectedFile || importing}
+				disabled={!selectedFile || !rootPersonId || importing}
 			>
 				{importing ? 'Importing — this may take a minute...' : 'Import GEDCOM'}
 			</button>
@@ -420,13 +649,61 @@
 					</div>
 
 					<div class="import-options">
-						<label class="field">
-							<span>Root Person ID</span>
-							<input type="text" bind:value={mergeRootId} placeholder="I1" />
-							<span class="field-hint">
-								The GEDCOM individual ID for the second person (e.g., I1 in their file).
-							</span>
-						</label>
+						<div class="field">
+							<span>Root Person</span>
+							{#if scanningMergeFile}
+								<div class="scanning-hint">Scanning file...</div>
+							{:else if mergePersonList.length > 0}
+								<!-- svelte-ignore a11y_no_static_element_interactions -->
+								<div class="person-picker" onkeydown={(e) => { if (e.key === 'Escape') showMergePersonDropdown = false; }}>
+									<input
+										type="text"
+										bind:value={mergePersonSearch}
+										placeholder="Search by name..."
+										onfocus={() => showMergePersonDropdown = true}
+										oninput={() => { showMergePersonDropdown = true; mergeRootId = ''; }}
+										onblur={() => { setTimeout(() => showMergePersonDropdown = false, 200); }}
+									/>
+									{#if mergeRootId}
+										<span class="picked-id">{mergeRootId}</span>
+									{/if}
+									{#if showMergePersonDropdown}
+										<div class="person-dropdown">
+											{#each filteredMergePersons as person (person.id)}
+												<button
+													type="button"
+													class="person-option"
+													onmousedown={() => selectMergePerson(person)}
+												>
+													<span class="option-name">{person.name}</span>
+													{#if person.birthYear || person.birthPlace}
+														<span class="option-detail">
+															{person.birthYear ? `b. ${person.birthYear}` : ''}
+															{person.birthPlace ? person.birthPlace.split(',')[0].trim() : ''}
+														</span>
+													{/if}
+													<span class="option-id">{person.id}</span>
+												</button>
+											{/each}
+											{#if filteredMergePersons.length === 0}
+												<div class="no-results">No matches</div>
+											{/if}
+											{#if mergePersonList.length > 50 && !mergePersonSearch}
+												<div class="dropdown-hint">{mergePersonList.length} persons — type to filter</div>
+											{/if}
+										</div>
+									{/if}
+								</div>
+								<span class="field-hint">
+									Search for the starting person. {mergePersonList.length} individuals found.
+								</span>
+							{:else}
+								<input type="text" bind:value={mergeRootId} placeholder="@I1@" />
+								<span class="field-hint">
+									Select a GEDCOM file first, or enter the individual ID manually.
+								</span>
+							{/if}
+						</div>
 						<label class="field">
 							<span>Label</span>
 							<input type="text" value="wife" disabled />
@@ -451,7 +728,7 @@
 						<button
 							class="btn btn-primary btn-sm"
 							onclick={() => showMergeConfirm = true}
-							disabled={!mergeFile || merging}
+							disabled={!mergeFile || !mergeRootId || merging}
 						>
 							{merging ? 'Merging — this may take a minute...' : 'Merge GEDCOM'}
 						</button>
@@ -642,6 +919,96 @@
 	}
 	.failed-list li {
 		margin-bottom: 2px;
+	}
+
+	/* Person picker */
+	.person-picker {
+		position: relative;
+	}
+	.person-picker input[type="text"] {
+		width: 100%;
+		padding: 6px 10px;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		font-size: 0.85rem;
+		font-family: inherit;
+	}
+	.person-picker input:focus {
+		outline: none;
+		border-color: var(--color-primary);
+	}
+	.picked-id {
+		font-size: 0.7rem !important;
+		font-weight: 400 !important;
+		color: var(--color-primary) !important;
+		font-family: monospace;
+	}
+	.scanning-hint {
+		font-size: 0.8rem;
+		color: var(--color-text-muted);
+		font-style: italic;
+		padding: 6px 0;
+	}
+	.person-dropdown {
+		position: absolute;
+		top: 100%;
+		left: 0;
+		right: 0;
+		max-height: 260px;
+		overflow-y: auto;
+		background: var(--color-bg, #fff);
+		border: 1px solid var(--color-border);
+		border-top: none;
+		border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+		z-index: 100;
+	}
+	.person-option {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		width: 100%;
+		padding: 6px 10px;
+		border: none;
+		background: none;
+		cursor: pointer;
+		font-size: 0.8rem;
+		text-align: left;
+		font-family: inherit;
+	}
+	.person-option:hover {
+		background: var(--color-surface, #f8f9fa);
+	}
+	.option-name {
+		font-weight: 600;
+		flex: 1;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.option-detail {
+		color: var(--color-text-muted);
+		font-size: 0.75rem;
+		white-space: nowrap;
+	}
+	.option-id {
+		color: var(--color-text-muted);
+		font-size: 0.65rem;
+		font-family: monospace;
+		white-space: nowrap;
+	}
+	.no-results {
+		padding: 8px 10px;
+		font-size: 0.8rem;
+		color: var(--color-text-muted);
+		font-style: italic;
+	}
+	.dropdown-hint {
+		padding: 6px 10px;
+		font-size: 0.7rem;
+		color: var(--color-text-muted);
+		border-top: 1px solid var(--color-border);
+		text-align: center;
 	}
 
 	/* Management mode */
