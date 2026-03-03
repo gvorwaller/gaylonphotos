@@ -3,6 +3,7 @@
 	 * Admin GEDCOM import and ancestry management.
 	 * Props: collectionSlug, ancestry
 	 */
+	import { untrack } from 'svelte';
 	import { apiUpload, apiPut, apiDelete } from '$lib/api.js';
 	import Modal from '$lib/components/common/Modal.svelte';
 
@@ -24,7 +25,7 @@
 		let birthPlace = null;
 		let inBirt = false;
 
-		const lines = text.split(/\r?\n/);
+		const lines = text.split(/\r\n|\r|\n/);
 		for (const line of lines) {
 			const match = line.match(/^(\d+)\s+(@\S+@|\S+)\s?(.*)?$/);
 			if (!match) continue;
@@ -89,13 +90,14 @@
 		});
 	}
 
-	// Sync from prop on initial load (or after re-mount on navigation)
+	// Sync from prop on initial load (or after re-mount on navigation).
+	// Uses untrack(loaded) so the effect only subscribes to `ancestry`, not `loaded`.
+	// No cleanup needed — component remount creates a fresh loaded=false.
 	$effect(() => {
-		if (!loaded && ancestry !== null) {
+		if (ancestry !== null && !untrack(() => loaded)) {
 			localAncestry = ancestry;
 			loaded = true;
 		}
-		return () => { loaded = false; };
 	});
 
 	// --- Import mode state ---
@@ -109,12 +111,8 @@
 	let personSearch = $state('');
 	let showPersonDropdown = $state(false);
 	let scanningFile = $state(false);
-	let importFileGen = 0;
 
-	// Parse persons from import file (generation counter guards against stale async results)
-	$effect(() => {
-		const file = selectedFile;
-		const gen = ++importFileGen;
+	async function scanImportFile(file) {
 		if (!file) {
 			personList = [];
 			personSearch = '';
@@ -123,17 +121,15 @@
 			return;
 		}
 		scanningFile = true;
-		readFileAsText(file).then((text) => {
-			if (gen !== importFileGen) return;
+		try {
+			const text = await readFileAsText(file);
 			personList = parseGedcomPersonList(text);
-			scanningFile = false;
-		}).catch(() => {
-			if (gen !== importFileGen) return;
+		} catch {
 			personList = [];
-			scanningFile = false;
 			importError = 'Could not read the GEDCOM file';
-		});
-	});
+		}
+		scanningFile = false;
+	}
 
 	// --- Merge mode state ---
 	let mergeMode = $state(false);
@@ -143,12 +139,8 @@
 	let mergePersonSearch = $state('');
 	let showMergePersonDropdown = $state(false);
 	let scanningMergeFile = $state(false);
-	let mergeFileGen = 0;
 
-	// Parse persons from merge file (generation counter guards against stale async results)
-	$effect(() => {
-		const file = mergeFile;
-		const gen = ++mergeFileGen;
+	async function scanMergeFile(file) {
 		if (!file) {
 			mergePersonList = [];
 			mergePersonSearch = '';
@@ -157,17 +149,15 @@
 			return;
 		}
 		scanningMergeFile = true;
-		readFileAsText(file).then((text) => {
-			if (gen !== mergeFileGen) return;
+		try {
+			const text = await readFileAsText(file);
 			mergePersonList = parseGedcomPersonList(text);
-			scanningMergeFile = false;
-		}).catch(() => {
-			if (gen !== mergeFileGen) return;
+		} catch {
 			mergePersonList = [];
-			scanningMergeFile = false;
 			mergeError = 'Could not read the GEDCOM file';
-		});
-	});
+		}
+		scanningMergeFile = false;
+	}
 	let mergeMaxGen = $state(8);
 	let merging = $state(false);
 	let mergeError = $state('');
@@ -227,7 +217,10 @@
 
 	function handleFileInput(e) {
 		const file = e.target.files?.[0];
-		if (file) selectedFile = file;
+		if (file) {
+			selectedFile = file;
+			scanImportFile(file);
+		}
 		e.target.value = '';
 	}
 
@@ -236,6 +229,7 @@
 		const file = e.dataTransfer.files?.[0];
 		if (file && file.name.toLowerCase().endsWith('.ged')) {
 			selectedFile = file;
+			scanImportFile(file);
 		}
 	}
 
@@ -299,7 +293,10 @@
 
 	function handleMergeFileInput(e) {
 		const file = e.target.files?.[0];
-		if (file) mergeFile = file;
+		if (file) {
+			mergeFile = file;
+			scanMergeFile(file);
+		}
 		e.target.value = '';
 	}
 
@@ -308,6 +305,7 @@
 		const file = e.dataTransfer.files?.[0];
 		if (file && file.name.toLowerCase().endsWith('.ged')) {
 			mergeFile = file;
+			scanMergeFile(file);
 		}
 	}
 
