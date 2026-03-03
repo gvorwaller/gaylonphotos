@@ -124,7 +124,7 @@ const EVENT_TAGS = {
  * @returns {{ individuals: Map, families: Map }}
  */
 export function parseGedcom(text) {
-	const lines = text.replace(/\r\n?/g, '\n').split('\n');
+	const lines = text.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').split('\n');
 
 	const individuals = new Map(); // id → { name, gender, facts[], fsId, familyChild, familySpouse[] }
 	const families = new Map();    // id → { husband, wife, children[] , facts[] }
@@ -613,6 +613,208 @@ export function rebuildPlaces(persons, geocoded, itineraryStops) {
 }
 
 // ---------------------------------------------------------------------------
+// Merge ancestry (combine two GEDCOM imports)
+// ---------------------------------------------------------------------------
+
+/**
+ * Merge a new GEDCOM import into existing ancestry data.
+ * Deduplicates persons by fsId, prefixes new lineage labels, tracks multiple roots.
+ *
+ * @param {object} existing — current ancestry.json data
+ * @param {{ individuals: Map, families: Map }} parsed — newly parsed GEDCOM
+ * @param {string} newRootId — root person xref from the new GEDCOM
+ * @param {number} maxGenerations
+ * @param {Map} geocoded — place name → { lat, lng, country, status }
+ * @param {object[]} itineraryStops
+ * @param {string} lineagePrefix — prefix for new lineage labels (e.g. 'wife')
+ * @param {{ source: string, fileName: string }} importMeta
+ * @returns {object} — merged ancestry.json schema
+ */
+export function mergeAncestry(existing, parsed, newRootId, maxGenerations, geocoded, itineraryStops, lineagePrefix, importMeta) {
+	if (!Array.isArray(existing?.persons) || !Array.isArray(existing?.places)) {
+		throw new Error('Existing ancestry data is corrupted — missing persons or places array');
+	}
+
+	const { individuals, families } = parsed;
+	const genMap = computeGenerations(newRootId, individuals, families, maxGenerations);
+
+	// Build sets for dedup — by fsId and by person ID (prevents duplicates on repeated merges)
+	const existingFsIds = new Set();
+	const existingPersonIds = new Set();
+	for (const p of existing.persons) {
+		if (p.fsId) existingFsIds.add(p.fsId);
+		existingPersonIds.add(p.id);
+	}
+
+	// Build new persons, skipping duplicates by fsId
+	const newPersons = [];
+	let dupCount = 0;
+
+	for (const [id, genInfo] of genMap) {
+		const indi = individuals.get(id);
+		if (!indi) continue;
+
+		// Dedup: skip if this person's fsId already exists in the dataset
+		if (indi.fsId && existingFsIds.has(indi.fsId)) {
+			dupCount++;
+			continue;
+		}
+
+		const birthFact = indi.facts.find((f) => f.type === 'Birth');
+		const deathFact = indi.facts.find((f) => f.type === 'Death');
+
+		// Include marriage facts from FAM records
+		const allFacts = [...indi.facts];
+		for (const famId of indi.familySpouse) {
+			const fam = families.get(famId);
+			if (fam) {
+				for (const fact of fam.facts) {
+					allFacts.push({ ...fact });
+				}
+			}
+		}
+
+		// Prefix lineage with source label
+		let lineage = genInfo.lineage;
+		if (lineage === 'self') {
+			lineage = `${lineagePrefix}-self`;
+		} else if (lineage === 'both') {
+			lineage = `${lineagePrefix}-both`;
+		} else {
+			lineage = `${lineagePrefix}-${lineage}`;
+		}
+
+		// Prefix lineagePath
+		const pathPrefix = lineagePrefix.charAt(0).toUpperCase() + lineagePrefix.slice(1);
+		const rawPath = genInfo.lineagePath || '';
+		const lineagePath = genInfo.generation === 0 || !rawPath
+			? pathPrefix
+			: `${pathPrefix}'s ${rawPath.charAt(0).toLowerCase()}${rawPath.slice(1)}`;
+
+		const cleanId = id.replace(/@/g, '');
+		const newId = `${lineagePrefix}_${cleanId}`;
+
+		// Skip if this person ID already exists (repeated merge with same file)
+		if (existingPersonIds.has(newId)) {
+			dupCount++;
+			continue;
+		}
+
+		newPersons.push({
+			id: newId,
+			fsId: indi.fsId ?? null,
+			name: indi.name,
+			gender: indi.gender,
+			birthDate: birthFact?.date ?? null,
+			birthYear: birthFact?.year ?? null,
+			birthPlace: birthFact?.place ?? null,
+			deathDate: deathFact?.date ?? null,
+			deathYear: deathFact?.year ?? null,
+			deathPlace: deathFact?.place ?? null,
+			generation: genInfo.generation,
+			lineage,
+			lineagePath,
+			facts: allFacts
+				.filter((f) => f.place || f.date)
+				.map((f) => ({
+					type: f.type,
+					date: f.date ?? null,
+					year: f.year ?? null,
+					place: f.place ?? null
+				}))
+		});
+	}
+
+	// Combine persons
+	const allPersons = [...existing.persons, ...newPersons];
+
+	// Merge geocoded: combine existing place coords with new geocode results
+	const existingGeoMap = new Map();
+	for (const place of existing.places) {
+		existingGeoMap.set(place.name, {
+			lat: place.lat,
+			lng: place.lng,
+			country: place.country,
+			status: place.geocodeStatus
+		});
+	}
+	// Overlay new geocode results (for places that didn't exist before)
+	const combinedGeo = new Map(existingGeoMap);
+	for (const [name, result] of geocoded) {
+		if (!combinedGeo.has(name)) {
+			combinedGeo.set(name, result);
+		}
+	}
+
+	// Rebuild places from combined person set
+	const places = rebuildPlaces(allPersons, combinedGeo, itineraryStops);
+
+	// Update meta
+	const rootPerson = individuals.get(newRootId);
+	const existingRootIds = existing.meta.rootPersonIds || [existing.meta.rootPersonId];
+	const existingRootNames = existing.meta.rootPersonNames || [existing.meta.rootPersonName];
+
+	const maxGen = allPersons.reduce((max, p) => Math.max(max, p.generation), 0);
+
+	// Build updated familyLines
+	const existingLines = existing.familyLines || [];
+	const pl = pathLabel(lineagePrefix);
+	const newLines = [
+		{ id: `${lineagePrefix}-self`, label: pl },
+		{ id: `${lineagePrefix}-paternal`, label: `${pl}'s Father's Line` },
+		{ id: `${lineagePrefix}-maternal`, label: `${pl}'s Mother's Line` },
+		{ id: `${lineagePrefix}-both`, label: `${pl} (Both Lines)` }
+	];
+	// Only add lines that don't already exist
+	const existingLineIds = new Set(existingLines.map((l) => l.id));
+	const familyLines = [...existingLines];
+	for (const line of newLines) {
+		if (!existingLineIds.has(line.id)) {
+			familyLines.push(line);
+		}
+	}
+
+	// Build merged meta — remove stale singular rootPersonId/rootPersonName
+	const { rootPersonId: _rpId, rootPersonName: _rpName, ...baseMeta } = existing.meta;
+
+	return {
+		meta: {
+			...baseMeta,
+			importedAt: new Date().toISOString(),
+			rootPersonIds: [...existingRootIds, newRootId],
+			rootPersonNames: [...existingRootNames, rootPerson?.name || ''],
+			generationCount: maxGen,
+			totalPersons: allPersons.length,
+			totalPlaces: places.length,
+			mergeHistory: [
+				...(existing.meta.mergeHistory || []),
+				{
+					source: importMeta.source || 'gedcom',
+					fileName: importMeta.fileName || '',
+					lineagePrefix,
+					addedPersons: newPersons.length,
+					skippedDuplicates: dupCount,
+					mergedAt: new Date().toISOString()
+				}
+			]
+		},
+		persons: allPersons,
+		places,
+		familyLines,
+		_mergeReport: {
+			addedPersons: newPersons.length,
+			skippedDuplicates: dupCount,
+			newPlacesGeocoded: geocoded.size,
+			personsWithoutFsId: newPersons.filter((p) => !p.fsId).length
+		}
+	};
+}
+
+function pathLabel(prefix) {
+	return prefix.charAt(0).toUpperCase() + prefix.slice(1);
+}
+
+// ---------------------------------------------------------------------------
 // Full import pipeline
 // ---------------------------------------------------------------------------
 
@@ -624,10 +826,13 @@ export function rebuildPlaces(persons, geocoded, itineraryStops) {
  * @param {string} rootPersonId — GEDCOM xref e.g. "@I1@"
  * @param {number} maxGenerations — 1–8
  * @param {string} fileName — original file name for metadata
+ * @param {{ merge?: boolean, lineagePrefix?: string }} [options] — merge options
  * @returns {Promise<{ ancestry: object, geocodeReport: object }>}
  */
-export async function importGedcom(collectionSlug, gedcomText, rootPersonId, maxGenerations, fileName) {
+export async function importGedcom(collectionSlug, gedcomText, rootPersonId, maxGenerations, fileName, options = {}) {
 	await validateTravelCollection(collectionSlug);
+
+	const { merge = false, lineagePrefix = 'wife' } = options;
 
 	// Normalize rootPersonId — ensure it has @ delimiters
 	rootPersonId = rootPersonId.replace(/^@?([A-Za-z0-9_]+)@?$/, '@$1@');
@@ -661,28 +866,57 @@ export async function importGedcom(collectionSlug, gedcomText, rootPersonId, max
 		}
 	}
 
-	// Cap unique places to keep geocoding within HTTP timeout (~110s at 1.1s/req)
-	const placeList = [...placeNames];
-	if (placeList.length > 100) {
-		throw new Error(`Too many unique places (${placeList.length}). Maximum is 100. Try reducing maxGenerations.`);
-	}
-
-	// Geocode
-	const geocoded = await geocodePlaces(placeList);
-
 	// Load itinerary for nearStop computation
 	const itinerary = await getItinerary(collectionSlug);
 	const stops = itinerary?.stops || [];
 
-	// Build (pass pre-computed genMap to avoid redundant BFS)
-	const ancestry = buildAncestry(
-		parsed, geocoded, rootPersonId, maxGenerations, stops,
-		{ source: 'gedcom', fileName }, genMap
-	);
+	// If merging, skip geocoding for places we already have coords for
+	let existing = null;
+	const existingPlaceNames = new Set();
+	if (merge) {
+		existing = await getAncestry(collectionSlug);
+		if (!existing) {
+			throw new Error('No existing ancestry data to merge with. Use a regular import first.');
+		}
+		for (const place of existing.places) {
+			if (place.lat != null && place.lng != null) {
+				existingPlaceNames.add(place.name);
+			}
+		}
+	}
+
+	// Only geocode places we don't already have
+	const placesToGeocode = [...placeNames].filter((name) => !existingPlaceNames.has(name));
+
+	// Cap unique places to keep geocoding within HTTP timeout (~110s at 1.1s/req)
+	if (placesToGeocode.length > 100) {
+		throw new Error(`Too many unique new places (${placesToGeocode.length}). Maximum is 100. Try reducing maxGenerations.`);
+	}
+
+	// Geocode only new places
+	const geocoded = await geocodePlaces(placesToGeocode);
+
+	let ancestry;
+	if (merge && existing) {
+		// Merge into existing data
+		ancestry = mergeAncestry(
+			existing, parsed, rootPersonId, maxGenerations,
+			geocoded, stops, lineagePrefix,
+			{ source: 'gedcom', fileName }
+		);
+	} else {
+		// Fresh import (pass pre-computed genMap to avoid redundant BFS)
+		ancestry = buildAncestry(
+			parsed, geocoded, rootPersonId, maxGenerations, stops,
+			{ source: 'gedcom', fileName }, genMap
+		);
+	}
 
 	// Save
 	await ensureDir(join(DATA_DIR, collectionSlug));
-	await writeJson(ancestryPath(collectionSlug), ancestry);
+	const toSave = { ...ancestry };
+	delete toSave._mergeReport;
+	await writeJson(ancestryPath(collectionSlug), toSave);
 
 	// Build geocode report
 	const geocodeReport = {
@@ -701,5 +935,11 @@ export async function importGedcom(collectionSlug, gedcomText, rootPersonId, max
 		}
 	}
 
-	return { ancestry, geocodeReport };
+	// Include merge stats in response
+	if (ancestry._mergeReport) {
+		geocodeReport.mergeReport = ancestry._mergeReport;
+		delete ancestry._mergeReport;
+	}
+
+	return { ancestry: toSave, geocodeReport };
 }

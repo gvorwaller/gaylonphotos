@@ -71,6 +71,10 @@ img {
   --color-line-maternal: #D97706;
   --color-line-self: #6c757d;
   --color-line-both: #059669;
+  --color-line-wife-paternal: #2563EB;
+  --color-line-wife-maternal: #DC2626;
+  --color-line-wife-self: #6c757d;
+  --color-line-wife-both: #059669;
   --color-ancestry-marker: #8B5CF6;
 
   /* Layout */

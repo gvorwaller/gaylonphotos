@@ -28,12 +28,22 @@
 	let geocodeReport = $state(null);
 	let selectedFile = $state(null);
 
+	// --- Merge mode state ---
+	let mergeMode = $state(false);
+	let mergeFile = $state(null);
+	let mergeRootId = $state('I1');
+	let mergeMaxGen = $state(8);
+	let merging = $state(false);
+	let mergeError = $state('');
+	let mergeReport = $state(null);
+
 	// --- Management mode state ---
 	let saving = $state(false);
 	let saved = $state(false);
 	let saveError = $state('');
 	let showClearConfirm = $state(false);
 	let showReimportConfirm = $state(false);
+	let showMergeConfirm = $state(false);
 
 	function handleFileInput(e) {
 		const file = e.target.files?.[0];
@@ -103,6 +113,49 @@
 			selectedFile = null;
 		} else {
 			saveError = result.error;
+		}
+	}
+
+	function handleMergeFileInput(e) {
+		const file = e.target.files?.[0];
+		if (file) mergeFile = file;
+	}
+
+	function handleMergeDrop(e) {
+		e.preventDefault();
+		const file = e.dataTransfer.files?.[0];
+		if (file && file.name.toLowerCase().endsWith('.ged')) {
+			mergeFile = file;
+		}
+	}
+
+	async function doMerge() {
+		if (!mergeFile || merging) return;
+		merging = true;
+		mergeError = '';
+		mergeReport = null;
+
+		const formData = new FormData();
+		formData.append('file', mergeFile);
+		formData.append('collection', collectionSlug);
+		formData.append('rootPersonId', mergeRootId);
+		formData.append('maxGenerations', String(mergeMaxGen));
+		formData.append('merge', 'true');
+		formData.append('lineagePrefix', 'wife');
+
+		const result = await apiUpload('/api/ancestry', formData);
+
+		merging = false;
+
+		if (result.ok) {
+			localAncestry = result.data.ancestry;
+			geocodeReport = result.data.geocodeReport;
+			mergeReport = result.data.geocodeReport?.mergeReport || null;
+			mergeMode = false;
+			mergeFile = null;
+			loaded = true;
+		} else {
+			mergeError = result.error;
 		}
 	}
 
@@ -314,6 +367,101 @@
 				{/each}
 			</div>
 
+			{#if mergeReport}
+				<div class="geocode-report" style="margin-top: 16px;">
+					<h3>Merge Report</h3>
+					<div class="report-stats">
+						<span class="stat ok">{mergeReport.addedPersons} persons added</span>
+						{#if mergeReport.skippedDuplicates > 0}
+							<span class="stat approx">{mergeReport.skippedDuplicates} duplicates skipped</span>
+						{/if}
+						<span class="stat">{mergeReport.newPlacesGeocoded} new places geocoded</span>
+					</div>
+					{#if mergeReport.personsWithoutFsId > 0}
+						<p class="help-text" style="margin-top: 8px; margin-bottom: 0;">
+							{mergeReport.personsWithoutFsId} of {mergeReport.addedPersons} added persons have no FamilySearch ID — duplicates may exist if the same ancestor appears in both trees.
+						</p>
+					{/if}
+				</div>
+			{/if}
+
+			<!-- Merge import panel -->
+			{#if mergeMode}
+				<section class="merge-section">
+					<h3 class="subsection-title">Merge GEDCOM</h3>
+					<p class="help-text">
+						Import a second GEDCOM file (e.g. spouse's family tree). Persons already in the dataset
+						(matched by FamilySearch ID) will be skipped.
+					</p>
+
+					<!-- svelte-ignore a11y_no_static_element_interactions -->
+					<div
+						class="drop-zone"
+						class:has-file={mergeFile}
+						ondragover={(e) => e.preventDefault()}
+						ondrop={handleMergeDrop}
+					>
+						{#if mergeFile}
+							<p class="file-name">{mergeFile.name}</p>
+							<span class="file-size">{(mergeFile.size / 1024).toFixed(1)} KB</span>
+						{:else}
+							<p>Drag & drop a .ged file here</p>
+							<span>or</span>
+						{/if}
+						<label class="btn btn-outline btn-sm">
+							{mergeFile ? 'Change File' : 'Browse Files'}
+							<input
+								type="file"
+								accept=".ged"
+								onchange={handleMergeFileInput}
+								style="display: none;"
+							/>
+						</label>
+					</div>
+
+					<div class="import-options">
+						<label class="field">
+							<span>Root Person ID</span>
+							<input type="text" bind:value={mergeRootId} placeholder="I1" />
+							<span class="field-hint">
+								The GEDCOM individual ID for the second person (e.g., I1 in their file).
+							</span>
+						</label>
+						<label class="field">
+							<span>Label</span>
+							<input type="text" value="wife" disabled />
+							<span class="field-hint">
+								Lineage label for merged persons. Only "wife" is currently supported.
+							</span>
+						</label>
+						<label class="field">
+							<span>Max Generations</span>
+							<div class="slider-row">
+								<input type="range" min="1" max="8" bind:value={mergeMaxGen} />
+								<span class="slider-value">{mergeMaxGen}</span>
+							</div>
+						</label>
+					</div>
+
+					{#if mergeError}
+						<div class="field-error">{mergeError}</div>
+					{/if}
+
+					<div class="merge-actions">
+						<button
+							class="btn btn-primary btn-sm"
+							onclick={() => showMergeConfirm = true}
+							disabled={!mergeFile || merging}
+						>
+							{merging ? 'Merging — this may take a minute...' : 'Merge GEDCOM'}
+						</button>
+						<button class="btn btn-outline btn-sm" onclick={() => { mergeMode = false; mergeFile = null; mergeError = ''; }}>
+							Cancel
+						</button>
+					</div>
+				</section>
+			{/if}
+
 			<!-- Actions -->
 			<div class="manage-actions">
 				<button
@@ -325,6 +473,11 @@
 				>
 					{saving ? 'Saving...' : saved ? 'Saved!' : 'Save Changes'}
 				</button>
+				{#if !mergeMode}
+					<button class="btn btn-outline btn-sm" onclick={() => mergeMode = true}>
+						Merge Import
+					</button>
+				{/if}
 				<button class="btn btn-outline btn-sm" onclick={() => showReimportConfirm = true}>
 					Re-import
 				</button>
@@ -340,7 +493,15 @@
 	<p>Unsaved edits will be lost. Continue to re-import?</p>
 	{#snippet actions()}
 		<button class="btn btn-outline btn-sm" onclick={() => showReimportConfirm = false}>Cancel</button>
-		<button class="btn btn-primary btn-sm" onclick={() => { showReimportConfirm = false; localAncestry = null; selectedFile = null; geocodeReport = null; importError = ''; }}>Re-import</button>
+		<button class="btn btn-primary btn-sm" onclick={() => { showReimportConfirm = false; localAncestry = null; selectedFile = null; geocodeReport = null; importError = ''; mergeMode = false; mergeFile = null; mergeError = ''; mergeReport = null; }}>Re-import</button>
+	{/snippet}
+</Modal>
+
+<Modal title="Merge GEDCOM" show={showMergeConfirm} onclose={() => showMergeConfirm = false}>
+	<p>Merging will read ancestry data from disk. Any unsaved edits (e.g. coordinate fixes) will be lost. Save first if needed.</p>
+	{#snippet actions()}
+		<button class="btn btn-outline btn-sm" onclick={() => showMergeConfirm = false}>Cancel</button>
+		<button class="btn btn-primary btn-sm" onclick={() => { showMergeConfirm = false; doMerge(); }}>Continue Merge</button>
 	{/snippet}
 </Modal>
 
@@ -616,6 +777,20 @@
 		color: #fff;
 		opacity: 0.7;
 		cursor: default;
+	}
+
+	/* Merge section */
+	.merge-section {
+		margin-top: 20px;
+		padding: 16px;
+		background: var(--color-surface);
+		border: 1px solid var(--color-primary);
+		border-radius: var(--radius-md);
+	}
+	.merge-actions {
+		display: flex;
+		gap: 8px;
+		margin-top: 12px;
 	}
 
 	@media (max-width: 1024px) {

@@ -133,13 +133,68 @@ Evaluate the re-review results:
 - **If only P3 issues remain** → Fix them, then do ONE final review pass.
 - **If the review comes back clean (0 P1, 0 P2, 0 P3)** → Proceed to Step 4.
 
-**Maximum iterations:** 5 rounds. If still not clean after 5 rounds, stop and present remaining issues to the user for guidance.
+**Maximum iterations:** 5 rounds. If still not clean after 5 rounds, proceed to **Step 3.5** before presenting to the user.
 
 Display a running scoreboard:
 ```
 Review Round 1: 3 P1, 5 P2, 2 P3 → Fixed all
 Review Round 2: 0 P1, 1 P2, 1 P3 → Fixed all
 Review Round 3: 0 P1, 0 P2, 0 P3 → CLEAN
+```
+
+---
+
+## Step 3.5: Final Sanity Validation
+
+**When to run:** After either (a) the loop hits the 5-round cap with remaining issues, or (b) the loop exits clean. This catches both false positives from the hostile reviewer AND any issues the adversarial cycle may have introduced through its own fixes.
+
+Spawn a **different kind of sub-agent** (`subagent_type: "general-purpose"`) — this one is NOT hostile. It is an **objective validator**:
+
+> You are an **objective code validator**. You are NOT an adversarial reviewer — your job is to verify claims, not manufacture findings.
+>
+> **Context:** An adversarial review loop has completed N rounds of review-and-fix on these files. Below are the remaining flagged issues (if any) and a summary of all fixes applied during the review cycle.
+>
+> [Include: remaining issues from the final round, list of all files modified, summary of fixes applied]
+>
+> **Your tasks:**
+>
+> ### 1. Validate Remaining Issues
+> For each remaining P1/P2/P3 issue flagged by the hostile reviewer:
+> - Read the actual source code at the cited location
+> - Determine if the issue is **REAL** (actual bug, genuine risk, or legitimate concern) or a **FALSE POSITIVE** (code is correct, reviewer was being overzealous, or the concern is theoretical with no practical impact)
+> - For each issue, state your verdict with a brief explanation
+>
+> ### 2. Verify Fix Integrity
+> Quickly scan ALL fixes applied during the review cycle to check that no fix introduced a new problem:
+> - Did any fix break an adjacent code path?
+> - Did any fix change behavior beyond the minimal correction?
+> - Are all fixes consistent with each other (no contradictions)?
+>
+> **Output Format:**
+> ```
+> ## Remaining Issue Validation
+> - [issue description] → REAL / FALSE POSITIVE — [1-sentence reason]
+> - [issue description] → REAL / FALSE POSITIVE — [1-sentence reason]
+>
+> ## Fix Integrity Check
+> [PASS: All fixes look correct / PROBLEM: description of any fix-introduced issue]
+>
+> ## Final Verdict
+> REAL issues remaining: N
+> False positives dismissed: N
+> Fix integrity: PASS/FAIL
+> ```
+
+**After the validator returns:**
+- If **fix integrity fails** → fix the identified problem, then re-run this validation step once
+- If **all remaining issues are false positives** → mark the review as CLEAN and proceed to Step 4
+- If **real issues remain** → fix them (no re-review needed; the validator already confirmed they're real), then proceed to Step 4
+- Display the validation results to the user as part of the scoreboard:
+
+```
+Review Round 5: 0 P1, 2 P2, 1 P3 → Fixed all
+Sanity Validation: 2 false positives dismissed, 1 real fix applied, fix integrity PASS
+Final Status: CLEAN
 ```
 
 ---

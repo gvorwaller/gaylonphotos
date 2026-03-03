@@ -39,6 +39,13 @@ export async function POST({ request }) {
 	const collection = formData.get('collection');
 	const rootPersonId = formData.get('rootPersonId');
 	const maxGenerations = parseInt(formData.get('maxGenerations') ?? '8', 10);
+	const merge = formData.get('merge') === 'true';
+	const lineagePrefix = formData.get('lineagePrefix') || 'wife';
+
+	// Only "wife" is currently supported — frontend By Family Line tab hardcodes wife-* columns
+	if (merge && lineagePrefix !== 'wife') {
+		return json({ error: 'lineagePrefix must be "wife" (only supported value currently)' }, { status: 400 });
+	}
 
 	if (!file || !collection || !rootPersonId) {
 		return json({ error: 'file, collection, and rootPersonId required' }, { status: 400 });
@@ -72,15 +79,17 @@ export async function POST({ request }) {
 	try {
 		const gedcomText = await file.text();
 		const { ancestry, geocodeReport } = await importGedcom(
-			collection, gedcomText, rootPersonId, maxGenerations, file.name
+			collection, gedcomText, rootPersonId, maxGenerations, file.name,
+			merge ? { merge, lineagePrefix } : {}
 		);
 		return json({ ancestry, geocodeReport }, { status: 201 });
 	} catch (err) {
 		console.error('GEDCOM import failed:', err);
-		const status = err.message.includes('not found') ? 404
-			: err.message.includes('not "travel"') ? 400
+		const msg = err.message || '';
+		const status = msg.includes('not found') ? 404
+			: msg.includes('not "travel"') || msg.includes('No existing') || msg.includes('Too many unique') ? 400
 			: 500;
-		return json({ error: status === 500 ? 'GEDCOM import failed' : err.message }, { status });
+		return json({ error: status === 500 ? 'GEDCOM import failed' : msg }, { status });
 	}
 }
 

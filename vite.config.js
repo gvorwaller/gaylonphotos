@@ -32,6 +32,7 @@ function stripInvalidRollupOutputOptions() {
 export default defineConfig({
 	plugins: [sveltekit(), stripInvalidRollupOutputOptions()],
 	server: {
-		port: 5174
+		port: 5174,
+		host: true // Expose to LAN for mobile/tablet testing
 	}
 });

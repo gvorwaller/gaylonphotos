@@ -48,12 +48,26 @@
 		})
 	);
 
-	// By Family Line: group visible persons by lineage (self and 'both' appear in both columns)
+	// By Family Line: group visible persons by lineage
+	// "self" and "both" appear in both paternal/maternal columns for the primary root
 	let paternalPersons = $derived(
 		visiblePersons.filter((p) => p.lineage === 'paternal' || p.lineage === 'self' || p.lineage === 'both').sort((a, b) => a.generation - b.generation)
 	);
 	let maternalPersons = $derived(
 		visiblePersons.filter((p) => p.lineage === 'maternal' || p.lineage === 'self' || p.lineage === 'both').sort((a, b) => a.generation - b.generation)
+	);
+
+	// Detect merged ancestry — check for wife-* lineage prefixes
+	let hasWifeLines = $derived(
+		(ancestry?.persons || []).some((p) => p.lineage?.startsWith('wife-'))
+	);
+
+	// Wife's family line persons
+	let wifePaternal = $derived(
+		visiblePersons.filter((p) => p.lineage === 'wife-paternal' || p.lineage === 'wife-self' || p.lineage === 'wife-both').sort((a, b) => a.generation - b.generation)
+	);
+	let wifeMaternal = $derived(
+		visiblePersons.filter((p) => p.lineage === 'wife-maternal' || p.lineage === 'wife-self' || p.lineage === 'wife-both').sort((a, b) => a.generation - b.generation)
 	);
 
 	// By Generation: group visible persons by generation number
@@ -126,7 +140,11 @@
 		return parts.join(' \u2192 ') || '';
 	}
 
-	const VALID_LINEAGES = new Set(['paternal', 'maternal', 'self', 'both']);
+	// Must stay in sync with --color-line-* CSS variables in global.css
+	const VALID_LINEAGES = new Set([
+		'paternal', 'maternal', 'self', 'both',
+		'wife-paternal', 'wife-maternal', 'wife-self', 'wife-both'
+	]);
 
 	function safeLineageColor(lineage) {
 		return VALID_LINEAGES.has(lineage) ? `var(--color-line-${lineage}, #6c757d)` : '#6c757d';
@@ -252,7 +270,7 @@
 					{#if visiblePersons.length === 0}
 						<p class="ancestry-empty">No ancestors in the current map view — zoom out or pan to see more.</p>
 					{:else}
-						<div class="line-columns">
+						<div class="line-columns" class:four-columns={hasWifeLines}>
 							<div class="line-column">
 								<h3 class="line-heading" style="color: var(--color-line-paternal);">
 									Father's Line
@@ -277,6 +295,32 @@
 									{/each}
 								{/if}
 							</div>
+							{#if hasWifeLines}
+								<div class="line-column">
+									<h3 class="line-heading" style="color: var(--color-line-wife-paternal);">
+										Wife's Father's Line
+									</h3>
+									{#if wifePaternal.length === 0}
+										<p class="ancestry-empty-small">No ancestors in view.</p>
+									{:else}
+										{#each wifePaternal as person (person.id)}
+											{@render personRow(person, 'wife-paternal')}
+										{/each}
+									{/if}
+								</div>
+								<div class="line-column">
+									<h3 class="line-heading" style="color: var(--color-line-wife-maternal);">
+										Wife's Mother's Line
+									</h3>
+									{#if wifeMaternal.length === 0}
+										<p class="ancestry-empty-small">No ancestors in view.</p>
+									{:else}
+										{#each wifeMaternal as person (person.id)}
+											{@render personRow(person, 'wife-maternal')}
+										{/each}
+									{/if}
+								</div>
+							{/if}
 						</div>
 					{/if}
 
@@ -684,6 +728,14 @@
 		display: grid;
 		grid-template-columns: 1fr 1fr;
 		gap: 20px;
+	}
+	.line-columns.four-columns {
+		grid-template-columns: repeat(4, 1fr);
+	}
+	@media (max-width: 1024px) {
+		.line-columns.four-columns {
+			grid-template-columns: 1fr 1fr;
+		}
 	}
 	@media (max-width: 640px) {
 		.line-columns {
