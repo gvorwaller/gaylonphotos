@@ -105,6 +105,8 @@
 					onboundschange={handleBoundsChange}
 					ancestryPlaces={hasAncestry ? data.ancestry.places : []}
 					showAncestry={showAncestryOnMap}
+					collectionSlug={data.collection.slug}
+					ancestry={hasAncestry ? data.ancestry : null}
 				/>
 			</section>
 

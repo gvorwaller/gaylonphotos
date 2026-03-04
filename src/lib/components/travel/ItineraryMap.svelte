@@ -11,8 +11,123 @@
 		apiKey = '',
 		onboundschange = null,
 		ancestryPlaces = [],
-		showAncestry = false
+		showAncestry = false,
+		collectionSlug = '',
+		ancestry = null
 	} = $props();
+
+	// Use globalThis.Map — `Map` is shadowed by the Map.svelte component import
+	let personMap = $derived(new globalThis.Map((ancestry?.persons || []).map((p) => [p.id, p])));
+
+	function eventIcon(type) {
+		const icons = {
+			Birth: '\u2605', Christening: '\u2020', Baptism: '\u2020',
+			Marriage: '\u2661', Death: '\u271D', Burial: '\u26B0',
+			Immigration: '\u2708', Emigration: '\u2708',
+			Residence: '\u2302', Census: '\u2316',
+			Occupation: '\u2692', 'Military Service': '\u2694',
+			Naturalization: '\u2691', Will: '\u270D', Probate: '\u2696',
+			Event: '\u2022'
+		};
+		return icons[type] || '\u2022';
+	}
+
+	const IW = 'font-family:system-ui,-apple-system,sans-serif;font-size:13px;color:#212529;max-height:280px;overflow-y:auto;line-height:1.4;';
+
+	function buildAncestryInfoHtml(place) {
+		let html = `<div style="${IW}">`;
+		html += `<div style="font-weight:700;margin-bottom:4px;">${esc(place.name)}</div>`;
+		if (place.country) html += `<div style="color:#6c757d;font-size:12px;margin-bottom:6px;">${esc(place.country)}</div>`;
+		if (place.nearStop) {
+			html += `<span style="display:inline-block;background:#e8f5e9;color:#2e7d32;font-size:11px;padding:1px 6px;border-radius:4px;margin-bottom:6px;">Visited</span>`;
+		}
+		const events = (place.events || []).slice().sort((a, b) => (a.year || 9999) - (b.year || 9999));
+		const show = events.slice(0, 8);
+		if (show.length > 0) {
+			html += `<div style="border-top:1px solid #e9ecef;padding-top:4px;margin-top:4px;">`;
+			for (const evt of show) {
+				const person = personMap.get(evt.personId);
+				const icon = eventIcon(evt.type);
+				let name = esc(evt.personName || 'Unknown');
+				if (person?.fsId) {
+					name = `<a href="https://www.familysearch.org/tree/person/details/${encodeURIComponent(person.fsId)}" target="_blank" rel="noopener" style="color:#28a745;text-decoration:none;">${name}</a>`;
+				}
+				html += `<div style="margin-bottom:3px;">${icon} <strong>${name}</strong> &mdash; ${esc(evt.type)}${evt.year ? ', ' + esc(String(evt.year)) : ''}</div>`;
+			}
+			if (events.length > 8) {
+				html += `<div style="color:#6c757d;font-size:12px;margin-top:2px;">and ${events.length - 8} more&hellip;</div>`;
+			}
+			html += `</div>`;
+		}
+		html += `</div>`;
+		return html;
+	}
+
+	function buildStopInfoHtml(stop) {
+		let html = `<div style="${IW}">`;
+		html += `<div style="font-weight:700;margin-bottom:4px;">${esc(stop.city || 'Stop')}</div>`;
+		if (stop.country) html += `<div style="color:#6c757d;font-size:12px;margin-bottom:6px;">${esc(stop.country)}</div>`;
+		const dates = formatDateRange(stop.arrivalDate, stop.departureDate);
+		if (dates) html += `<div style="margin-bottom:4px;">${dates}</div>`;
+		if (stop.notes) {
+			const truncated = stop.notes.length > 150 ? stop.notes.slice(0, 150) + '\u2026' : stop.notes;
+			html += `<div style="color:#6c757d;font-size:12px;margin-top:4px;">${esc(truncated)}</div>`;
+		}
+		html += `</div>`;
+		return html;
+	}
+
+	function buildPhotoInfoHtml(photo) {
+		const thumbUrl = photo.thumbnail || photo.url;
+		const href = `/${encodeURIComponent(collectionSlug)}/photo/${encodeURIComponent(photo.id)}`;
+		let html = `<div style="${IW}">`;
+		if (thumbUrl) {
+			html += `<a href="${esc(href)}" style="display:block;margin-bottom:6px;"><img src="${esc(thumbUrl)}" alt="${esc(photo.description || photo.filename || '')}" style="width:120px;border-radius:4px;"></a>`;
+		}
+		if (photo.description) html += `<div style="margin-bottom:4px;">${esc(photo.description)}</div>`;
+		if (photo.date) {
+			html += `<div style="color:#6c757d;font-size:12px;">${esc(formatDate(photo.date))}</div>`;
+		}
+		html += `</div>`;
+		return html;
+	}
+
+	function handleMarkerClick({ id }) {
+		if (id.startsWith('ancestry-')) {
+			const place = ancestryPlaces.find((p) => p.id === id.slice(9));
+			if (place) return { content: buildAncestryInfoHtml(place), zoomLevel: 11 };
+		} else if (id.startsWith('stop-')) {
+			const stop = stops.find((s) => String(s.id) === id.slice(5));
+			if (stop) return { content: buildStopInfoHtml(stop), zoomLevel: 12 };
+		} else if (id.startsWith('photo-')) {
+			const photo = photos.find((p) => p.id === id.slice(6));
+			if (photo) return { content: buildPhotoInfoHtml(photo), zoomLevel: 13 };
+		}
+		return null;
+	}
+
+	/** Escape HTML entities for safe injection into InfoWindow */
+	function esc(str) {
+		if (str == null) return '';
+		return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+	}
+
+	function formatDate(dateStr) {
+		if (!dateStr) return '';
+		try {
+			return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+		} catch {
+			return dateStr;
+		}
+	}
+
+	function formatDateRange(arrival, departure) {
+		if (!arrival && !departure) return '';
+		const a = formatDate(arrival);
+		const d = formatDate(departure);
+		if (a && d) return `${esc(a)} &ndash; ${esc(d)}`;
+		return esc(a) || esc(d);
+	}
 
 	let markers = $derived.by(() => {
 		const m = [];
@@ -77,6 +192,8 @@
 		markers={markers}
 		polyline={polylinePath}
 		{onboundschange}
+		infoWindowEnabled={true}
+		onmarkerclick={handleMarkerClick}
 	/>
 </div>
 

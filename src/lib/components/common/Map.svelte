@@ -11,9 +11,10 @@
 	 *   clickable: boolean — if true, dispatches onmapclick (default: false)
 	 *   apiKey: string — Google Maps API key
 	 *   onmapclick: ({ lat, lng }) => void
-	 *   onmarkerclick: ({ id }) => void
+	 *   onmarkerclick: ({ id, lat, lng, label }) => { content, zoomLevel } | null
 	 *   onmapready: (map) => void
 	 *   onboundschange: (bounds) => void — fires on idle with { north, south, east, west }
+	 *   infoWindowEnabled: boolean — if true, opens InfoWindow with onmarkerclick result
 	 */
 
 	let {
@@ -26,13 +27,15 @@
 		onmapclick = null,
 		onmarkerclick = null,
 		onmapready = null,
-		onboundschange = null
+		onboundschange = null,
+		infoWindowEnabled = false
 	} = $props();
 
 	let mapContainer;
 	let map = $state(null);
 	let googleMarkers = [];
 	let googlePolyline = null;
+	let infoWindowInstance = null;
 	let apiLoaded = $state(false);
 	let initialFitDone = false; // Not reactive — one-shot flag read inside effect
 
@@ -89,6 +92,7 @@
 		script.onload = () => { apiLoaded = true; };
 		script.onerror = () => { console.error('Failed to load Google Maps API'); };
 		document.head.appendChild(script);
+		return () => { script.onload = null; script.onerror = null; };
 	});
 
 	// Initialize map when API is loaded
@@ -104,6 +108,11 @@
 			streetViewControl: false,
 			fullscreenControl: true
 		});
+
+		// InfoWindow created once at mount — infoWindowEnabled cannot change dynamically
+		if (infoWindowEnabled) {
+			infoWindowInstance = new google.maps.InfoWindow({ maxWidth: 320 });
+		}
 
 		if (clickable) {
 			map.addListener('click', (e) => {
@@ -132,30 +141,36 @@
 		}
 	});
 
-	// Sync markers
+	// Sync markers (cleanup fn runs before re-execution, clearing old markers)
 	$effect(() => {
 		if (!map) return;
-
-		// Clear old markers
-		for (const m of googleMarkers) {
-			m.map = null;
-		}
-		googleMarkers = [];
+		const currentOnMarkerClick = onmarkerclick; // read synchronously for Svelte 5 dependency tracking
+		if (infoWindowInstance) infoWindowInstance.close();
 
 		// Add new markers
 		for (const m of markers) {
+			const contentEl = m.color ? createColoredMarkerElement(m.color, m.shape) : null;
 			const marker = new google.maps.marker.AdvancedMarkerElement({
 				position: { lat: m.lat, lng: m.lng },
 				map,
 				title: m.label || '',
-				...(m.color ? { content: createColoredMarkerElement(m.color, m.shape) } : {})
+				...(currentOnMarkerClick ? { gmpClickable: true } : {}),
+				...(contentEl ? { content: contentEl } : {})
 			});
 
-			if (onmarkerclick) {
-				marker.addEventListener('gmp-click', () => {
-					onmarkerclick({ id: m.id, lat: m.lat, lng: m.lng, label: m.label });
-				});
-			}
+			const handleClick = () => {
+				if (!currentOnMarkerClick) return;
+				const result = currentOnMarkerClick({ id: m.id, lat: m.lat, lng: m.lng, label: m.label });
+				if (infoWindowEnabled && infoWindowInstance && result?.content) {
+					infoWindowInstance.setContent(result.content);
+					infoWindowInstance.open({ anchor: marker, map });
+					map.panTo({ lat: m.lat, lng: m.lng });
+					const targetZoom = result.zoomLevel ?? 11;
+					if (map.getZoom() < targetZoom) map.setZoom(targetZoom);
+				}
+			};
+
+			marker.addListener('click', handleClick);
 
 			googleMarkers.push(marker);
 		}
@@ -176,6 +191,7 @@
 
 		return () => {
 			for (const m of googleMarkers) {
+				google.maps.event.clearInstanceListeners(m);
 				m.map = null;
 			}
 			googleMarkers = [];
@@ -214,6 +230,10 @@
 	$effect(() => {
 		const currentMap = map;
 		return () => {
+			if (infoWindowInstance) {
+				infoWindowInstance.close();
+				infoWindowInstance = null;
+			}
 			if (currentMap) google.maps.event.clearInstanceListeners(currentMap);
 			for (const m of googleMarkers) m.map = null;
 			googleMarkers = [];
