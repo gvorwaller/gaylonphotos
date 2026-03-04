@@ -33,7 +33,7 @@
 
 	let mapContainer;
 	let map = $state(null);
-	let googleMarkers = [];
+	let googleMarkers = []; // Array of { marker, handler } objects
 	let googlePolyline = null;
 	let infoWindowInstance = null;
 	let apiLoaded = $state(false);
@@ -161,7 +161,11 @@
 			const handleClick = () => {
 				if (!currentOnMarkerClick) return;
 				const result = currentOnMarkerClick({ id: m.id, lat: m.lat, lng: m.lng, label: m.label });
-				if (infoWindowEnabled && infoWindowInstance && result?.content) {
+				if (infoWindowEnabled && result?.content) {
+					// Lazy-create InfoWindow (survives HMR where plain lets reset but $state map persists)
+					if (!infoWindowInstance) {
+						infoWindowInstance = new google.maps.InfoWindow({ maxWidth: 320 });
+					}
 					infoWindowInstance.setContent(result.content);
 					infoWindowInstance.open({ anchor: marker, map });
 					map.panTo({ lat: m.lat, lng: m.lng });
@@ -170,9 +174,10 @@
 				}
 			};
 
-			marker.addListener('click', handleClick);
+			marker.addEventListener('gmp-click', handleClick);
+			if (contentEl) contentEl.addEventListener('click', handleClick);
 
-			googleMarkers.push(marker);
+			googleMarkers.push({ marker, handler: handleClick, contentEl });
 		}
 
 		// Auto-fit bounds only on initial load (don't fight user panning)
@@ -190,9 +195,10 @@
 		}
 
 		return () => {
-			for (const m of googleMarkers) {
-				google.maps.event.clearInstanceListeners(m);
-				m.map = null;
+			for (const { marker, handler, contentEl } of googleMarkers) {
+				marker.removeEventListener('gmp-click', handler);
+				if (contentEl) contentEl.removeEventListener('click', handler);
+				marker.map = null;
 			}
 			googleMarkers = [];
 		};
@@ -235,7 +241,10 @@
 				infoWindowInstance = null;
 			}
 			if (currentMap) google.maps.event.clearInstanceListeners(currentMap);
-			for (const m of googleMarkers) m.map = null;
+			for (const { marker, handler, contentEl } of googleMarkers) {
+				if (contentEl) contentEl.removeEventListener('click', handler);
+				marker.map = null;
+			}
 			googleMarkers = [];
 			if (googlePolyline) {
 				googlePolyline.setMap(null);
