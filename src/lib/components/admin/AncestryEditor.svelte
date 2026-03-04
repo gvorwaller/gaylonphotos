@@ -355,6 +355,68 @@
 	}
 
 	let failedCount = $derived(localAncestry?.places?.filter((p) => p.geocodeStatus === 'failed').length ?? 0);
+
+	// --- Place geocode lookup state ---
+	let lookupPlaceId = $state(null);
+	let lookupQuery = $state('');
+	let lookupLoading = $state(false);
+	let lookupError = $state('');
+
+	function updatePlaceFull(placeId, lat, lng, country, status) {
+		localAncestry = {
+			...localAncestry,
+			places: localAncestry.places.map((p) =>
+				p.id === placeId ? { ...p, lat, lng, country, geocodeStatus: status } : p
+			)
+		};
+	}
+
+	function startLookup(place) {
+		lookupPlaceId = place.id;
+		lookupQuery = place.name;
+		lookupError = '';
+	}
+
+	function cancelLookup() {
+		lookupPlaceId = null;
+		lookupQuery = '';
+		lookupError = '';
+		lookupLoading = false;
+	}
+
+	async function lookupPlace(placeId, query) {
+		lookupLoading = true;
+		lookupError = '';
+		try {
+			const url = `https://nominatim.openstreetmap.org/search?${new URLSearchParams({
+				q: query,
+				format: 'json',
+				limit: '1',
+				addressdetails: '1'
+			})}`;
+			const res = await fetch(url, {
+				headers: { 'User-Agent': 'GaylonPhotos/1.0' }
+			});
+			const data = await res.json();
+			if (!data.length) {
+				lookupError = 'No results';
+				lookupLoading = false;
+				return;
+			}
+			const top = data[0];
+			const lat = parseFloat(top.lat);
+			const lng = parseFloat(top.lon);
+			const country = top.address?.country || '';
+			const rank = top.place_rank ?? 0;
+			const status = (rank < 10 || rank > 22) ? 'approximate' : 'ok';
+			updatePlaceFull(placeId, lat, lng, country, status);
+			lookupPlaceId = null;
+			lookupQuery = '';
+		} catch {
+			lookupError = 'Lookup failed';
+		}
+		lookupLoading = false;
+	}
 </script>
 
 <div class="ancestry-editor">
@@ -547,31 +609,57 @@
 					<span>Lng</span>
 					<span>Status</span>
 					<span>Events</span>
+					<span></span>
 				</div>
 				{#each localAncestry.places as place (place.id)}
-					<div class="table-row" class:failed={place.geocodeStatus === 'failed'}>
+					<div class="table-row" class:failed={place.geocodeStatus === 'failed'} class:lookup-active={lookupPlaceId === place.id}>
 						<span class="place-name" title={place.name}>{place.name}</span>
 						<span>{place.country || '—'}</span>
-						<input
-							type="number"
-							step="any"
-							value={place.lat}
-							class="coord-input"
-							class:failed-input={place.geocodeStatus === 'failed'}
-							onchange={(e) => updatePlaceCoords(place.id, e.target.value, place.lng)}
-						/>
-						<input
-							type="number"
-							step="any"
-							value={place.lng}
-							class="coord-input"
-							class:failed-input={place.geocodeStatus === 'failed'}
-							onchange={(e) => updatePlaceCoords(place.id, place.lat, e.target.value)}
-						/>
-						<span class="status-badge" class:ok={place.geocodeStatus === 'ok'} class:approx={place.geocodeStatus === 'approximate'} class:fail={place.geocodeStatus === 'failed'} class:manual={place.geocodeStatus === 'manual'}>
-							{place.geocodeStatus}
-						</span>
+						{#if lookupPlaceId === place.id}
+							<!-- svelte-ignore a11y_no_static_element_interactions -->
+							<div class="lookup-inline" onkeydown={(e) => { if (e.key === 'Escape') cancelLookup(); }}>
+								<input
+									type="text"
+									class="lookup-input"
+									bind:value={lookupQuery}
+									placeholder="Search place name..."
+									onkeydown={(e) => { if (e.key === 'Enter') lookupPlace(place.id, lookupQuery); }}
+								/>
+								<button
+									class="btn btn-primary btn-xs lookup-go"
+									onclick={() => lookupPlace(place.id, lookupQuery)}
+									disabled={lookupLoading || !lookupQuery.trim()}
+								>
+									{lookupLoading ? '...' : 'Go'}
+								</button>
+								<button class="btn btn-outline btn-xs" onclick={cancelLookup}>✕</button>
+								{#if lookupError}
+									<span class="lookup-hint">{lookupError}</span>
+								{/if}
+							</div>
+						{:else}
+							<input
+								type="number"
+								step="any"
+								value={place.lat}
+								class="coord-input"
+								class:failed-input={place.geocodeStatus === 'failed'}
+								onchange={(e) => updatePlaceCoords(place.id, e.target.value, place.lng)}
+							/>
+							<input
+								type="number"
+								step="any"
+								value={place.lng}
+								class="coord-input"
+								class:failed-input={place.geocodeStatus === 'failed'}
+								onchange={(e) => updatePlaceCoords(place.id, place.lat, e.target.value)}
+							/>
+							<span class="status-badge" class:ok={place.geocodeStatus === 'ok'} class:approx={place.geocodeStatus === 'approximate'} class:fail={place.geocodeStatus === 'failed'} class:manual={place.geocodeStatus === 'manual'}>
+								{place.geocodeStatus}
+							</span>
+						{/if}
 						<span>{place.events.length}</span>
+						<button class="lookup-btn" title="Look up coordinates" onclick={() => startLookup(place)} disabled={lookupPlaceId === place.id}>&#x1F50D;</button>
 					</div>
 				{/each}
 			</div>
@@ -1038,7 +1126,7 @@
 	}
 	.table-header {
 		display: grid;
-		grid-template-columns: 2fr 1fr 80px 80px 80px 60px;
+		grid-template-columns: 2fr 1fr 80px 80px 80px 60px 32px;
 		gap: 8px;
 		padding: 8px 12px;
 		background: var(--color-bg);
@@ -1049,11 +1137,14 @@
 	}
 	.table-row {
 		display: grid;
-		grid-template-columns: 2fr 1fr 80px 80px 80px 60px;
+		grid-template-columns: 2fr 1fr 80px 80px 80px 60px 32px;
 		gap: 8px;
 		padding: 6px 12px;
 		border-top: 1px solid var(--color-border);
 		align-items: center;
+	}
+	.table-row.lookup-active {
+		grid-template-columns: 2fr 1fr 1fr 60px 32px;
 	}
 	.table-row.failed {
 		background: #fdf0f0;
@@ -1085,6 +1176,55 @@
 	.status-badge.approx { background: #fff3e0; color: #e65100; }
 	.status-badge.fail { background: #fce4ec; color: #c62828; }
 	.status-badge.manual { background: #e3f2fd; color: #1565c0; }
+	/* Lookup button + inline form */
+	.lookup-btn {
+		background: none;
+		border: 1px solid var(--color-border);
+		border-radius: 3px;
+		cursor: pointer;
+		font-size: 0.75rem;
+		padding: 2px 4px;
+		line-height: 1;
+	}
+	.lookup-btn:hover:not(:disabled) {
+		background: var(--color-surface);
+		border-color: var(--color-primary);
+	}
+	.lookup-btn:disabled {
+		opacity: 0.3;
+		cursor: default;
+	}
+	.lookup-inline {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+	}
+	.lookup-input {
+		flex: 1;
+		padding: 3px 6px;
+		border: 1px solid var(--color-primary);
+		border-radius: 3px;
+		font-size: 0.75rem;
+		font-family: inherit;
+		min-width: 0;
+	}
+	.lookup-input:focus {
+		outline: none;
+		box-shadow: 0 0 0 2px rgba(40, 167, 69, 0.15);
+	}
+	.lookup-go {
+		white-space: nowrap;
+	}
+	.btn-xs {
+		padding: 2px 8px;
+		font-size: 0.7rem;
+	}
+	.lookup-hint {
+		font-size: 0.7rem;
+		color: var(--color-danger);
+		white-space: nowrap;
+	}
+
 	.persons-list {
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-md);
@@ -1164,8 +1304,11 @@
 			gap: 12px;
 		}
 		.table-header, .table-row {
-			grid-template-columns: 1.5fr 1fr 60px 60px 60px 40px;
+			grid-template-columns: 1.5fr 1fr 60px 60px 60px 40px 28px;
 			font-size: 0.7rem;
+		}
+		.table-row.lookup-active {
+			grid-template-columns: 1.5fr 1fr 1fr 40px 28px;
 		}
 	}
 </style>
