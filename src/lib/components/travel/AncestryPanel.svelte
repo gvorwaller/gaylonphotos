@@ -170,6 +170,10 @@
 
 	let personMap = $derived(new Map((ancestry?.persons || []).map((p) => [p.id, p])));
 
+	// Root person first names for column headings (index 0 = primary import, index 1 = merged "wife-*" import)
+	let primaryName = $derived(ancestry?.meta?.rootPersonNames?.[0]?.split(' ')[0] || '');
+	let mergedName = $derived(ancestry?.meta?.rootPersonNames?.[1]?.split(' ')[0] || '');
+
 	function togglePerson(id) {
 		expandedPersonId = expandedPersonId === id ? null : id;
 	}
@@ -273,7 +277,7 @@
 						<div class="line-columns" class:four-columns={hasWifeLines}>
 							<div class="line-column">
 								<h3 class="line-heading" style="color: var(--color-line-paternal);">
-									Father's Line
+									{primaryName ? `${primaryName}'s` : ''} Father's Line
 								</h3>
 								{#if paternalPersons.length === 0}
 									<p class="ancestry-empty-small">No paternal ancestors in view.</p>
@@ -285,7 +289,7 @@
 							</div>
 							<div class="line-column">
 								<h3 class="line-heading" style="color: var(--color-line-maternal);">
-									Mother's Line
+									{primaryName ? `${primaryName}'s` : ''} Mother's Line
 								</h3>
 								{#if maternalPersons.length === 0}
 									<p class="ancestry-empty-small">No maternal ancestors in view.</p>
@@ -298,7 +302,7 @@
 							{#if hasWifeLines}
 								<div class="line-column">
 									<h3 class="line-heading" style="color: var(--color-line-wife-paternal);">
-										Wife's Father's Line
+										{mergedName ? `${mergedName}'s` : "Spouse's"} Father's Line
 									</h3>
 									{#if wifePaternal.length === 0}
 										<p class="ancestry-empty-small">No ancestors in view.</p>
@@ -310,7 +314,7 @@
 								</div>
 								<div class="line-column">
 									<h3 class="line-heading" style="color: var(--color-line-wife-maternal);">
-										Wife's Mother's Line
+										{mergedName ? `${mergedName}'s` : "Spouse's"} Mother's Line
 									</h3>
 									{#if wifeMaternal.length === 0}
 										<p class="ancestry-empty-small">No ancestors in view.</p>
