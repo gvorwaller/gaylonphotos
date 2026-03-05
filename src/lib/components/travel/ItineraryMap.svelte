@@ -19,6 +19,10 @@
 	// Use globalThis.Map — `Map` is shadowed by the Map.svelte component import
 	let personMap = $derived(new globalThis.Map((ancestry?.persons || []).map((p) => [p.id, p])));
 
+	// Root person first names for lineage badges (index 0 = primary import, index 1 = merged "wife-*" import)
+	let primaryName = $derived(ancestry?.meta?.rootPersonNames?.[0]?.split(' ')[0] || '');
+	let mergedName = $derived(ancestry?.meta?.rootPersonNames?.[1]?.split(' ')[0] || '');
+
 	function eventIcon(type) {
 		const icons = {
 			Birth: '\u2605', Christening: '\u2020', Baptism: '\u2020',
@@ -52,7 +56,9 @@
 				if (person?.fsId) {
 					name = `<a href="https://www.familysearch.org/tree/person/details/${encodeURIComponent(person.fsId)}" target="_blank" rel="noopener" style="color:#28a745;text-decoration:none;">${name}</a>`;
 				}
-				html += `<div style="margin-bottom:3px;">${icon} <strong>${name}</strong> &mdash; ${esc(evt.type)}${evt.year ? ', ' + esc(String(evt.year)) : ''}</div>`;
+				const lineageLabel = person?.lineage?.startsWith('wife-') ? mergedName : primaryName;
+				const lineageBadge = lineageLabel ? ` <span style="font-size:10px;color:#fff;background:${person?.lineage?.startsWith('wife-') ? '#6366f1' : '#d946ef'};padding:0 4px;border-radius:3px;vertical-align:middle;">${esc(lineageLabel)}</span>` : '';
+				html += `<div style="margin-bottom:3px;">${icon} <strong>${name}</strong>${lineageBadge} &mdash; ${esc(evt.type)}${evt.year ? ', ' + esc(String(evt.year)) : ''}</div>`;
 			}
 			if (events.length > 8) {
 				html += `<div style="color:#6c757d;font-size:12px;margin-top:2px;">and ${events.length - 8} more&hellip;</div>`;
