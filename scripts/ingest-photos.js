@@ -220,6 +220,10 @@ async function readTakeoutSidecar(photoPath) {
 
 import { randomBytes } from 'node:crypto';
 
+// Lazy-loaded only when --species flag is used
+let identifySpeciesFromBuffer = null;
+let speciesModel = null;
+
 function derivePhotoId(filename, existingIds) {
 	const base = filename.replace(/\.[^.]+$/, '');
 	let id = base.replace(/[^a-zA-Z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
@@ -237,7 +241,15 @@ function derivePhotoId(filename, existingIds) {
 
 // ── Main Ingest ─────────────────────────────────────────────────────
 
-async function ingest(collectionSlug, sourceDir) {
+async function ingest(collectionSlug, sourceDir, autoSpecies = false) {
+	if (autoSpecies) {
+		const vision = await import('./vision-standalone.js');
+		identifySpeciesFromBuffer = vision.identifySpeciesFromBuffer;
+		const { SPECIES_MODEL } = await import('../src/lib/vision-prompt.js');
+		speciesModel = SPECIES_MODEL;
+		console.log('Species auto-ID enabled (GPT-4.1-mini)\n');
+	}
+
 	console.log(`\nIngesting photos for collection: ${collectionSlug}`);
 	console.log(`Source directory: ${sourceDir}`);
 
@@ -359,6 +371,23 @@ async function ingest(collectionSlug, sourceDir) {
 				shutterSpeed: metadata.shutterSpeed
 			};
 
+			// Auto-identify species if flag is set
+			if (autoSpecies && identifySpeciesFromBuffer) {
+				const identification = await identifySpeciesFromBuffer(displayBuffer);
+				if (identification) {
+					photo.species = identification.species;
+					photo.scientificName = identification.scientificName;
+					photo.speciesAI = {
+						model: speciesModel,
+						confidence: identification.confidence,
+						detectedAt: new Date().toISOString()
+					};
+					console.log(`    Species: ${identification.species} (${identification.confidence})`);
+				} else {
+					console.log(`    Species: could not identify`);
+				}
+			}
+
 			photosData.photos.push(photo);
 			existingFilenames.add(filename);
 			ingested++;
@@ -379,27 +408,43 @@ async function ingest(collectionSlug, sourceDir) {
 	console.log(`  Ingested: ${ingested}`);
 	console.log(`  Skipped:  ${skipped} (already in photos.json)`);
 	console.log(`  Failed:   ${failed}`);
+	if (autoSpecies) {
+		const speciesCount = photosData.photos.filter((p) => p.species).length;
+		console.log(`  Species:  ${speciesCount} photos with species labels`);
+	}
 	console.log(`  Total:    ${photosData.photos.length} photos in collection\n`);
 }
 
 // ── CLI Entry ───────────────────────────────────────────────────────
 
-const args = process.argv.slice(2);
-if (args.length === 0) {
-	console.error('Usage: node scripts/ingest-photos.js <collection-slug> [source-dir]');
+const rawArgs = process.argv.slice(2);
+const flagArgs = rawArgs.filter((a) => a.startsWith('--'));
+const posArgs = rawArgs.filter((a) => !a.startsWith('--'));
+const speciesFlag = flagArgs.includes('--species');
+
+if (posArgs.length === 0) {
+	console.error('Usage: node scripts/ingest-photos.js <collection-slug> [source-dir] [--species]');
+	console.error('');
+	console.error('Options:');
+	console.error('  --species    Auto-identify bird species via Claude Vision (requires ANTHROPIC_API_KEY)');
 	console.error('');
 	console.error('If source-dir is omitted, defaults to photos/<collection-slug>/');
 	process.exit(1);
 }
 
-const slug = args[0];
+const slug = posArgs[0];
 if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(slug)) {
 	console.error(`Invalid collection slug: "${slug}". Must be lowercase alphanumeric with optional hyphens.`);
 	process.exit(1);
 }
-const sourceDir = args[1] || join('photos', slug);
+const sourceDir = posArgs[1] || join('photos', slug);
 
-ingest(slug, sourceDir).catch((err) => {
+if (speciesFlag && !process.env.OPENAI_API_KEY) {
+	console.error('--species requires OPENAI_API_KEY in .env');
+	process.exit(1);
+}
+
+ingest(slug, sourceDir, speciesFlag).catch((err) => {
 	console.error('Fatal error:', err);
 	process.exit(1);
 });

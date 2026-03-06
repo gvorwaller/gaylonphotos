@@ -3,7 +3,7 @@
 	 * Inline photo metadata editor.
 	 * Props: photo, collectionSlug, collectionType, apiKey, onupdated, ondeleted
 	 */
-	import { apiPut, apiDelete } from '$lib/api.js';
+	import { apiPost, apiPut, apiDelete } from '$lib/api.js';
 	import { reverseGeocode } from '$lib/geocoding.js';
 	import Modal from '$lib/components/common/Modal.svelte';
 
@@ -52,6 +52,7 @@
 	let saved = $state(false);
 	let error = $state('');
 	let showDeleteConfirm = $state(false);
+	let identifying = $state(false);
 
 	async function save() {
 		saving = true;
@@ -63,7 +64,14 @@
 			favorite
 		};
 
-		if (collectionType === 'wildlife') updates.species = species;
+		if (collectionType === 'wildlife') {
+			updates.species = species;
+			// Clear AI metadata if user manually changed the species
+			if (photo.speciesAI && species !== photo.species) {
+				updates.scientificName = null;
+				updates.speciesAI = null;
+			}
+		}
 		if (collectionType === 'action') {
 			updates.spot = spot;
 			updates.conditions = conditions;
@@ -83,6 +91,32 @@
 		} else {
 			error = result.error;
 		}
+	}
+
+	async function autoIdentify() {
+		identifying = true;
+		error = '';
+
+		const result = await apiPost('/api/vision', {
+			collection: collectionSlug,
+			photoIds: [photo.id]
+		});
+
+		identifying = false;
+
+		if (!result.ok) {
+			error = result.error || 'Auto-ID failed';
+			return;
+		}
+
+		const item = result.data.results?.[0];
+		if (!item || item.status !== 'identified') {
+			error = item?.reason || item?.error || 'Could not identify species';
+			return;
+		}
+
+		species = item.species;
+		onupdated?.(item.photo);
 	}
 
 	async function confirmDelete() {
@@ -140,8 +174,26 @@
 		{#if collectionType === 'wildlife'}
 			<label class="field">
 				<span>Species</span>
-				<input type="text" bind:value={species} placeholder="e.g. Bald Eagle" />
+				<div class="species-row">
+					<input type="text" bind:value={species} placeholder="e.g. Bald Eagle" />
+					<button
+						class="btn btn-outline btn-sm auto-id-btn"
+						onclick={autoIdentify}
+						disabled={identifying}
+						title="Use AI to identify bird species"
+					>
+						{identifying ? 'Identifying...' : 'Auto-ID'}
+					</button>
+				</div>
 			</label>
+			{#if photo.speciesAI}
+				<div class="ai-badge">
+					AI: {photo.speciesAI.confidence} confidence
+					{#if photo.scientificName}
+						<span class="scientific-name">({photo.scientificName})</span>
+					{/if}
+				</div>
+			{/if}
 		{/if}
 
 		{#if collectionType === 'action'}
@@ -156,7 +208,7 @@
 		{/if}
 
 		<div class="editor-actions">
-			<button class="btn btn-sm" class:btn-primary={!saved} class:btn-saved={saved} onclick={save} disabled={saving}>
+			<button class="btn btn-sm" class:btn-primary={!saved} class:btn-saved={saved} onclick={save} disabled={saving || identifying}>
 				{saving ? 'Saving...' : saved ? 'Saved!' : 'Save'}
 			</button>
 			<button class="btn btn-danger btn-sm" onclick={() => showDeleteConfirm = true}>
@@ -261,6 +313,31 @@
 		color: #fff;
 		opacity: 0.7;
 		cursor: default;
+	}
+
+	.species-row {
+		display: flex;
+		gap: 8px;
+		align-items: center;
+	}
+	.species-row input {
+		flex: 1;
+	}
+	.auto-id-btn {
+		white-space: nowrap;
+		flex-shrink: 0;
+	}
+	.auto-id-btn:disabled {
+		opacity: 0.6;
+		cursor: wait;
+	}
+	.ai-badge {
+		font-size: 0.7rem;
+		color: var(--color-text-muted);
+		padding: 2px 0;
+	}
+	.scientific-name {
+		font-style: italic;
 	}
 
 	@media (max-width: 1024px) {
