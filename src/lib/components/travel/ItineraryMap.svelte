@@ -141,7 +141,7 @@
 		// Stop markers (numbered, green circles)
 		for (let i = 0; i < stops.length; i++) {
 			const s = stops[i];
-			if (s.lat != null && s.lng != null) {
+			if (s.lat != null && s.lng != null && (s.lat !== 0 || s.lng !== 0)) {
 				m.push({
 					lat: s.lat,
 					lng: s.lng,
@@ -186,7 +186,7 @@
 	});
 
 	let polylinePath = $derived(
-		stops.filter((s) => s.lat != null && s.lng != null).map((s) => ({ lat: s.lat, lng: s.lng }))
+		stops.filter((s) => s.lat != null && s.lng != null && (s.lat !== 0 || s.lng !== 0)).map((s) => ({ lat: s.lat, lng: s.lng }))
 	);
 </script>
 

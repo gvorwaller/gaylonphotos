@@ -22,6 +22,45 @@
 	let saving = $state(false);
 	let showDeleteConfirm = $state(null); // stop index to delete
 
+	// Place search
+	let searchInput;
+	let mapInstance = $state(null);
+	let autocomplete = null;
+
+	function handleMapReady(map) {
+		mapInstance = map;
+	}
+
+	// Bind Places Autocomplete once map and input are both ready
+	$effect(() => {
+		if (!mapInstance || !searchInput || !window.google?.maps?.places) return;
+		if (autocomplete) return;
+
+		autocomplete = new google.maps.places.Autocomplete(searchInput, {
+			fields: ['geometry', 'name']
+		});
+		autocomplete.bindTo('bounds', mapInstance);
+		autocomplete.addListener('place_changed', () => {
+			const place = autocomplete.getPlace();
+			if (!place.geometry?.location) return;
+			const lat = place.geometry.location.lat();
+			const lng = place.geometry.location.lng();
+			mapInstance.setCenter({ lat, lng });
+			if (place.geometry.viewport) {
+				mapInstance.fitBounds(place.geometry.viewport);
+			} else {
+				mapInstance.setZoom(14);
+			}
+			// If a stop is being edited in pick-GPS mode, auto-set its coords
+			if (editingStopIdx !== null && pickingGps) {
+				stops[editingStopIdx].lat = lat;
+				stops[editingStopIdx].lng = lng;
+				stops = [...stops];
+				pickingGps = false;
+			}
+		});
+	});
+
 	$effect(() => {
 		tripName = itinerary?.trip?.name || '';
 		tripDesc = itinerary?.trip?.description || '';
@@ -32,7 +71,7 @@
 
 	// Map markers from stops
 	let markers = $derived(
-		stops.filter((s) => s.lat && s.lng).map((s, i) => ({
+		stops.filter((s) => s.lat != null && s.lng != null && (s.lat !== 0 || s.lng !== 0)).map((s, i) => ({
 			lat: s.lat,
 			lng: s.lng,
 			id: `stop-${s.id}`,
@@ -43,7 +82,7 @@
 
 	// Polyline from stops
 	let polylinePath = $derived(
-		stops.filter((s) => s.lat && s.lng).map((s) => ({ lat: s.lat, lng: s.lng }))
+		stops.filter((s) => s.lat != null && s.lng != null && (s.lat !== 0 || s.lng !== 0)).map((s) => ({ lat: s.lat, lng: s.lng }))
 	);
 
 	function addStop() {
@@ -167,7 +206,7 @@
 						</div>
 						<textarea bind:value={stop.notes} rows="1" placeholder="Notes"></textarea>
 						<div class="stop-gps">
-							{#if stop.lat && stop.lng}
+							{#if stop.lat != null && stop.lng != null && (stop.lat !== 0 || stop.lng !== 0)}
 								<span class="gps-display">{stop.lat.toFixed(4)}, {stop.lng.toFixed(4)}</span>
 							{:else}
 								<span class="gps-none">No location</span>
@@ -194,15 +233,22 @@
 	</div>
 
 	<div class="editor-right">
-		<GoogleMap
-			{apiKey}
-			center={{ lat: 55, lng: 15 }}
-			zoom={4}
-			{markers}
-			polyline={polylinePath}
-			clickable={true}
-			onmapclick={handleMapClick}
-		/>
+		<div class="search-bar">
+			<input bind:this={searchInput} type="text" class="search-input"
+				placeholder="Search for a place..." />
+		</div>
+		<div class="map-area">
+			<GoogleMap
+				{apiKey}
+				center={{ lat: 55, lng: 15 }}
+				zoom={4}
+				{markers}
+				polyline={polylinePath}
+				clickable={true}
+				onmapclick={handleMapClick}
+				onmapready={handleMapReady}
+			/>
+		</div>
 		{#if pickingGps}
 			<div class="map-hint">Click the map to set location for stop {(editingStopIdx ?? 0) + 1}</div>
 		{/if}
@@ -233,6 +279,32 @@
 	.editor-right {
 		width: 55%;
 		position: relative;
+		display: flex;
+		flex-direction: column;
+	}
+	.search-bar {
+		padding: 8px 12px;
+		border-bottom: 1px solid var(--color-border);
+		background: var(--color-surface);
+		flex-shrink: 0;
+	}
+	.search-input {
+		width: 100%;
+		padding: 8px 12px;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		font-size: 0.9rem;
+		font-family: inherit;
+		outline: none;
+		transition: border-color 0.15s;
+	}
+	.search-input:focus {
+		border-color: var(--color-primary);
+		box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.15);
+	}
+	.map-area {
+		flex: 1;
+		min-height: 0;
 	}
 	.trip-info {
 		background: var(--color-surface);
