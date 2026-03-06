@@ -4,23 +4,23 @@
  * Returns null on any error — same pattern as reverseGeocode.
  */
 import OpenAI from 'openai';
-import { OPENAI_API_KEY } from '$env/static/private';
+import { env } from '$env/dynamic/private';
 import { SPECIES_PROMPT, SPECIES_MODEL, parseSpeciesResponse } from '$lib/vision-prompt.js';
 
 let client = null;
 
 function getClient() {
-	if (!client) client = new OpenAI({ apiKey: OPENAI_API_KEY });
+	if (!client) client = new OpenAI({ apiKey: env.OPENAI_API_KEY });
 	return client;
 }
 
 /**
- * Identify bird species from a photo thumbnail URL.
- * @param {string} thumbnailUrl — CDN URL of the 400px thumbnail
+ * Identify bird species from a photo URL.
+ * @param {string} imageUrl — CDN URL of the display image
  * @returns {Promise<{ species: string, scientificName: string|null, confidence: string }|null>}
  */
-export async function identifySpecies(thumbnailUrl) {
-	if (!OPENAI_API_KEY) {
+export async function identifySpecies(imageUrl) {
+	if (!env.OPENAI_API_KEY) {
 		console.warn('Vision: OPENAI_API_KEY not configured');
 		return null;
 	}
@@ -33,7 +33,7 @@ export async function identifySpecies(thumbnailUrl) {
 				{
 					role: 'user',
 					content: [
-						{ type: 'image_url', image_url: { url: thumbnailUrl } },
+						{ type: 'image_url', image_url: { url: imageUrl } },
 						{ type: 'text', text: SPECIES_PROMPT }
 					]
 				}
