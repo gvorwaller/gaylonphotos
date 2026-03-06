@@ -5,9 +5,8 @@ node_modules/
 .svelte-kit/
 build/
 
-# Generated data
-data/admin.json
-data/*/ancestry.json
+# Runtime data (JSON "database" — managed via admin UI, not git)
+data/
 
 # Test data
 test-data/
