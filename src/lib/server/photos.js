@@ -207,10 +207,12 @@ export async function processAndUpload(collectionSlug, fileBuffer, originalFilen
 	// 2. Generate display-size and thumbnail images (normalized to JPEG)
 	const [displayBuffer, thumbBuffer] = await Promise.all([
 		sharp(fileBuffer)
+			.rotate() // auto-rotate based on EXIF orientation
 			.resize(DISPLAY_WIDTH, null, { withoutEnlargement: true })
 			.jpeg({ quality: 85 })
 			.toBuffer(),
 		sharp(fileBuffer)
+			.rotate() // auto-rotate based on EXIF orientation
 			.resize(THUMB_WIDTH, null, { withoutEnlargement: true })
 			.jpeg({ quality: 80 })
 			.toBuffer()

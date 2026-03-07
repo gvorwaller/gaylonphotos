@@ -44,7 +44,7 @@ export async function POST({ request }) {
 	}
 
 	// Validate content type (client-provided, checked again via magic bytes below)
-	const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+	const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
 	if (!allowedTypes.includes(file.type)) {
 		return json(
 			{ error: `Unsupported file type: ${file.type}. Allowed: ${allowedTypes.join(', ')}` },
@@ -71,7 +71,9 @@ export async function POST({ request }) {
 		const isJpeg = header[0] === 0xFF && header[1] === 0xD8;
 		const isPng = header[0] === 0x89 && header[1] === 0x50 && header[2] === 0x4E && header[3] === 0x47;
 		const isWebp = buffer.length >= 12 && buffer.subarray(8, 12).toString('ascii') === 'WEBP';
-		if (!isJpeg && !isPng && !isWebp) {
+		// HEIC/HEIF use ISO BMFF: bytes 4-7 are "ftyp"
+		const isHeic = buffer.length >= 12 && buffer.subarray(4, 8).toString('ascii') === 'ftyp';
+		if (!isJpeg && !isPng && !isWebp && !isHeic) {
 			return json({ error: 'File content does not match a supported image format' }, { status: 400 });
 		}
 

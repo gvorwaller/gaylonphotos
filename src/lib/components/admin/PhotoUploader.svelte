@@ -60,14 +60,23 @@
 		e.target.value = ''; // reset so same file can be re-selected
 	}
 
+	const MAX_BATCH = 300;
+	let batchError = $state('');
+
 	async function uploadFiles(files) {
 		if (uploading) return;
+		batchError = '';
 
 		const imageFiles = files.filter((f) =>
 			f.type.startsWith('image/')
 		);
 
 		if (imageFiles.length === 0) return;
+
+		if (imageFiles.length > MAX_BATCH) {
+			batchError = `Selected ${imageFiles.length} photos — max ${MAX_BATCH} per batch. Please select fewer files and upload in batches.`;
+			return;
+		}
 
 		uploading = true;
 		progress = imageFiles.map((f) => ({ name: f.name, status: 'pending' }));
@@ -118,13 +127,17 @@
 			Browse Files
 			<input
 				type="file"
-				accept="image/jpeg,image/png,image/webp"
+				accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
 				multiple
 				onchange={handleFileInput}
 				style="display: none;"
 			/>
 		</label>
 	</div>
+
+	{#if batchError}
+		<div class="batch-error">{batchError}</div>
+	{/if}
 
 	{#if progress.length > 0}
 		<div class="upload-progress">
@@ -179,6 +192,15 @@
 		font-size: 0.8rem;
 		color: var(--color-text-muted);
 		margin-bottom: 12px;
+	}
+	.batch-error {
+		margin-top: 12px;
+		padding: 10px 14px;
+		background: #fff3cd;
+		border: 1px solid #ffc107;
+		border-radius: var(--radius-sm);
+		color: #856404;
+		font-size: 0.85rem;
 	}
 	.upload-progress {
 		margin-top: 16px;
