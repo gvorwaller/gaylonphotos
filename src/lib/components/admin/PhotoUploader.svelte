@@ -67,8 +67,9 @@
 		if (uploading) return;
 		batchError = '';
 
+		const IMAGE_EXTS = /\.(jpe?g|png|webp|heic|heif|tiff?)$/i;
 		const imageFiles = files.filter((f) =>
-			f.type.startsWith('image/')
+			f.type.startsWith('image/') || IMAGE_EXTS.test(f.name)
 		);
 
 		if (imageFiles.length === 0) return;
