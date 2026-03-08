@@ -8,6 +8,27 @@
 	let { collectionSlug, onuploaded = null } = $props();
 
 	console.log('[PhotoUploader] Component loaded');
+
+	// Document-level diagnostic: catch ANY drop event on the page
+	if (typeof document !== 'undefined') {
+		document.addEventListener('dragenter', (e) => {
+			console.log('[DOC] dragenter', e.target.tagName, e.target.className);
+		});
+		document.addEventListener('dragover', (e) => {
+			// don't log every frame, just first
+		});
+		document.addEventListener('drop', (e) => {
+			console.log('[DOC] drop event on', e.target.tagName, e.target.className);
+			console.log('[DOC] files:', e.dataTransfer?.files?.length);
+			console.log('[DOC] items:', e.dataTransfer?.items?.length);
+			if (e.dataTransfer?.items) {
+				for (const item of e.dataTransfer.items) {
+					console.log(`[DOC] item: kind=${item.kind} type=${item.type}`);
+				}
+			}
+		});
+	}
+
 	let dragover = $state(false);
 	let uploading = $state(false);
 	let progress = $state([]); // Array of { name, status: 'pending'|'uploading'|'done'|'error', error? }
