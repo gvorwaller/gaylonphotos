@@ -44,8 +44,9 @@ export async function POST({ request }) {
 	}
 
 	// Validate content type (client-provided, checked again via magic bytes below)
+	// Allow empty type — Apple Photos drag-and-drop often provides no MIME type
 	const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
-	if (!allowedTypes.includes(file.type)) {
+	if (file.type && !allowedTypes.includes(file.type)) {
 		return json(
 			{ error: `Unsupported file type: ${file.type}. Allowed: ${allowedTypes.join(', ')}` },
 			{ status: 400 }
