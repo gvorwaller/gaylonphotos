@@ -67,12 +67,20 @@
 		if (uploading) return;
 		batchError = '';
 
+		// Debug: log what the browser gives us for each dropped file
+		console.log(`[PhotoUploader] Received ${files.length} files:`);
+		files.forEach((f, i) => console.log(`  [${i}] name="${f.name}" type="${f.type}" size=${f.size}`));
+
 		const IMAGE_EXTS = /\.(jpe?g|png|webp|heic|heif|tiff?)$/i;
 		const imageFiles = files.filter((f) =>
 			f.type.startsWith('image/') || IMAGE_EXTS.test(f.name)
 		);
 
-		if (imageFiles.length === 0) return;
+		console.log(`[PhotoUploader] After filter: ${imageFiles.length} image files`);
+		if (imageFiles.length === 0) {
+			console.warn('[PhotoUploader] No files passed the image filter — aborting');
+			return;
+		}
 
 		if (imageFiles.length > MAX_BATCH) {
 			batchError = `Selected ${imageFiles.length} photos — max ${MAX_BATCH} per batch. Please select fewer files and upload in batches.`;

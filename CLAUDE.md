@@ -6,15 +6,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Session Startup (Do These First, In Order)
 
-1. **Read docs/DESIGN_SPEC.md** — the authoritative implementation contract. If ARCHITECTURE.md or PROJECT_VISION.md conflict, DESIGN_SPEC wins.
-2. **Check recent devlog** — review the last few entries in `docs/devlog/` for recent decisions and work.
-3. **Task management** — run `td usage --new-session` to see current work (after reading docs).
+1. **Read `cs.md`** — hard rules on debugging methodology, infrastructure details, and historical failures. Non-negotiable.
+2. **Read docs/DESIGN_SPEC.md** — the authoritative implementation contract. If ARCHITECTURE.md or PROJECT_VISION.md conflict, DESIGN_SPEC wins.
+3. **Check recent devlog** — review the last few entries in `docs/devlog/` for recent decisions and work.
+4. **Task management** — run `td usage --new-session` to see current work (after reading docs).
 
 ## Project Overview
 
 Multi-collection photography showcase built with SvelteKit (SSR via adapter-node). Three collection types — `travel` (itinerary/timeline/map), `wildlife` (species grid/sighting map), `action` (spot-based gallery) — each routing to type-specific component sets. Single-admin auth with JSON file persistence. Photos stored on DO Spaces CDN.
 
-**No source code exists yet** — only architecture docs and data scaffolding. Implementation follows the 9-phase order in DESIGN_SPEC.md §12.
+Implementation followed the 9-phase order in DESIGN_SPEC.md §12. The app is live at https://gaylon.photos/.
 
 ## Commands
 
