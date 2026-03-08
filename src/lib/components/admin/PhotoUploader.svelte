@@ -7,12 +7,14 @@
 
 	let { collectionSlug, onuploaded = null } = $props();
 
+	console.log('[PhotoUploader] Component loaded');
 	let dragover = $state(false);
 	let uploading = $state(false);
 	let progress = $state([]); // Array of { name, status: 'pending'|'uploading'|'done'|'error', error? }
 
 	function handleDragOver(e) {
 		e.preventDefault();
+		e.stopPropagation();
 		dragover = true;
 	}
 
@@ -21,9 +23,12 @@
 	}
 
 	function handleDrop(e) {
+		console.log('[PhotoUploader] handleDrop fired');
 		e.preventDefault();
+		e.stopPropagation();
 		dragover = false;
 		const files = Array.from(e.dataTransfer.files);
+		console.log(`[PhotoUploader] dataTransfer.files: ${files.length}`);
 		uploadFiles(files);
 	}
 
