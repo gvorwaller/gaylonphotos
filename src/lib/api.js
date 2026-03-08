@@ -64,14 +64,18 @@ export async function apiUpload(path, formData) {
 		});
 		const contentType = res.headers.get('Content-Type') || '';
 		if (!contentType.includes('application/json')) {
+			const text = await res.text();
+			console.warn(`Upload non-JSON response [${res.status}]:`, text.slice(0, 500));
 			return { ok: false, data: null, error: `HTTP ${res.status}` };
 		}
 		const data = await res.json();
 		if (!res.ok) {
+			console.warn(`Upload failed [${res.status}]:`, data);
 			return { ok: false, data: null, error: data.error || `HTTP ${res.status}` };
 		}
 		return { ok: true, data, error: null };
 	} catch (err) {
+		console.warn('Upload exception:', err);
 		return { ok: false, data: null, error: err.message || 'Network error' };
 	}
 }
