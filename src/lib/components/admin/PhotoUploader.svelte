@@ -53,12 +53,6 @@
 		}
 	}
 
-	// Block all text/content insertion into the contenteditable drop zone.
-	// This keeps it editable (so iOS shows "Paste" on long-press) but empty.
-	function blockInput(e) {
-		e.preventDefault();
-	}
-
 	function handleFileInput(e) {
 		const files = Array.from(e.target.files);
 		uploadFiles(files);
@@ -124,16 +118,16 @@
 
 <div class="uploader">
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<!-- tabindex makes the div focusable so paste events work (iOS + Mac) -->
 	<div
 		class="drop-zone"
 		class:dragover
-		contenteditable="true"
+		tabindex="0"
 		role="button"
 		ondragover={handleDragOver}
 		ondragleave={handleDragLeave}
 		ondrop={handleDrop}
 		onpaste={handlePaste}
-		onbeforeinput={blockInput}
 	>
 		<p>Drag & drop photos here, or long-press to paste</p>
 		<span>or</span>
@@ -187,7 +181,6 @@
 		text-align: center;
 		transition: border-color 0.15s, background 0.15s;
 		cursor: pointer;
-		caret-color: transparent;
 		-webkit-user-select: none;
 		user-select: none;
 		outline: none;
