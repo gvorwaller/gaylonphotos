@@ -2,32 +2,15 @@
 	/**
 	 * Drag-and-drop photo upload component.
 	 * Props: collectionSlug, onuploaded
+	 *
+	 * NOTE: Drag-and-drop from Apple Photos directly to Safari is unreliable
+	 * (known Safari limitation). The reliable workflow is:
+	 *   1. Export from Photos to a Finder folder
+	 *   2. Drag from Finder to drop zone, or use Browse Files
 	 */
 	import { apiUpload } from '$lib/api.js';
 
 	let { collectionSlug, onuploaded = null } = $props();
-
-	console.log('[PhotoUploader] Component loaded');
-
-	// Document-level diagnostic: catch ANY drop event on the page
-	if (typeof document !== 'undefined') {
-		document.addEventListener('dragenter', (e) => {
-			console.log('[DOC] dragenter', e.target.tagName, e.target.className);
-		});
-		document.addEventListener('dragover', (e) => {
-			// don't log every frame, just first
-		});
-		document.addEventListener('drop', (e) => {
-			console.log('[DOC] drop event on', e.target.tagName, e.target.className);
-			console.log('[DOC] files:', e.dataTransfer?.files?.length);
-			console.log('[DOC] items:', e.dataTransfer?.items?.length);
-			if (e.dataTransfer?.items) {
-				for (const item of e.dataTransfer.items) {
-					console.log(`[DOC] item: kind=${item.kind} type=${item.type}`);
-				}
-			}
-		});
-	}
 
 	let dragover = $state(false);
 	let uploading = $state(false);
@@ -44,12 +27,10 @@
 	}
 
 	function handleDrop(e) {
-		console.log('[PhotoUploader] handleDrop fired');
 		e.preventDefault();
 		e.stopPropagation();
 		dragover = false;
 		const files = Array.from(e.dataTransfer.files);
-		console.log(`[PhotoUploader] dataTransfer.files: ${files.length}`);
 		uploadFiles(files);
 	}
 
@@ -87,20 +68,12 @@
 		if (uploading) return;
 		batchError = '';
 
-		// Debug: log what the browser gives us for each dropped file
-		console.log(`[PhotoUploader] Received ${files.length} files:`);
-		files.forEach((f, i) => console.log(`  [${i}] name="${f.name}" type="${f.type}" size=${f.size}`));
-
 		const IMAGE_EXTS = /\.(jpe?g|png|webp|heic|heif|tiff?)$/i;
 		const imageFiles = files.filter((f) =>
 			f.type.startsWith('image/') || IMAGE_EXTS.test(f.name)
 		);
 
-		console.log(`[PhotoUploader] After filter: ${imageFiles.length} image files`);
-		if (imageFiles.length === 0) {
-			console.warn('[PhotoUploader] No files passed the image filter — aborting');
-			return;
-		}
+		if (imageFiles.length === 0) return;
 
 		if (imageFiles.length > MAX_BATCH) {
 			batchError = `Selected ${imageFiles.length} photos — max ${MAX_BATCH} per batch. Please select fewer files and upload in batches.`;
@@ -139,7 +112,6 @@
 
 <div class="uploader">
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<!-- tabindex makes the div focusable so paste events work (iOS + Mac) -->
 	<div
 		class="drop-zone"
 		class:dragover
@@ -150,8 +122,8 @@
 		ondrop={handleDrop}
 		onpaste={handlePaste}
 	>
-		<p>Drag & drop photos here, or long-press to paste</p>
-		<span>or</span>
+		<p>Drag & drop photos from Finder, or use Browse Files</p>
+		<p class="hint">Tip: In Photos app, use File &gt; Export first, then drag from the export folder</p>
 		<label class="btn btn-outline btn-sm">
 			Browse Files
 			<input
@@ -215,10 +187,9 @@
 		color: var(--color-text-muted);
 		margin-bottom: 8px;
 	}
-	.drop-zone span {
-		display: block;
+	.drop-zone .hint {
 		font-size: 0.8rem;
-		color: var(--color-text-muted);
+		font-style: italic;
 		margin-bottom: 12px;
 	}
 	.batch-error {
