@@ -35,3 +35,8 @@ Thumbs.db
 .sidecar-start.sh
 .sidecar-base
 .td-root
+
+# Swift CLI build artifacts
+mac/photo-uploader-cli/.build/
+mac/photo-uploader-cli/.swiftpm/
+.photo-uploader-runs/
