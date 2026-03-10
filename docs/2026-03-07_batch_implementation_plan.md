@@ -110,10 +110,14 @@ filtered.sort((a, b) => {
 | td-8a9992 Ancestry name search | 2c | Add search to AncestryPanel |
 | td-286da1 Batch delete UI | 3a | Multi-select + bulk delete |
 | td-63cf89 Delete duplicates | — | Moved to P4 by user |
-| td-73c604 Shared album photos | — | Moved to P4 by user |
+| td-73c604 Shared album photos | — | Resolved: use local album, not shared |
 | td-77ddd9 Perceptual hash dedup | — | Future (already detailed in td) |
 | td-fa3441 Itinerary polyline | 4b | Debug timing issue |
 | td-0a402a Family locations | 4a | Data cleanup script |
+| td-3b705b AI location recognition | P2 | Gemini vision API for photos without GPS |
+| td-2f97fe Switch geocoding to Google | P3 | Replace Nominatim with Google Maps API |
+| (task #13) Video clip support | P2 | Support short video uploads + playback |
+| (task #14) Bulk reverse-geocode UI | P2 | Admin button to geocode photos with GPS but no place name |
 
 ---
 
