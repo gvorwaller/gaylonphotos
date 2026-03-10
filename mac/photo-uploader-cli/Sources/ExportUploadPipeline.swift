@@ -1,6 +1,9 @@
 import Foundation
 import Photos
 import CryptoKit
+import CoreGraphics
+import ImageIO
+import UniformTypeIdentifiers
 
 struct UploadFailure {
     let filename: String
@@ -65,7 +68,9 @@ class ExportUploadPipeline {
     let exportTimeoutSec: Int
     let targetAssetIDs: Set<String>?
     let exportDir: String
+    let googleMapsAPIKey: String?
     var currentProgress: String = ""  // e.g. "3/10" for progress display
+    var geocodedCount: Int = 0
 
     init(session: APISession,
          collection: String,
@@ -73,7 +78,8 @@ class ExportUploadPipeline {
          downloadOriginals: Bool,
          maxRetries: Int,
          exportTimeoutSec: Int,
-         targetAssetIDs: Set<String>? = nil) {
+         targetAssetIDs: Set<String>? = nil,
+         googleMapsAPIKey: String? = nil) {
         self.session = session
         self.collection = collection
         self.concurrency = concurrency
@@ -82,6 +88,7 @@ class ExportUploadPipeline {
         self.exportTimeoutSec = max(60, exportTimeoutSec)
         self.targetAssetIDs = targetAssetIDs
         self.exportDir = NSTemporaryDirectory() + "photo-uploader-\(ProcessInfo.processInfo.processIdentifier)"
+        self.googleMapsAPIKey = googleMapsAPIKey
     }
 
     func run() -> PipelineResults {
@@ -277,7 +284,9 @@ class ExportUploadPipeline {
                     errorCode: nil,
                     errorMessage: nil
                 ))
-                print("✓")
+                // Reverse geocode if photo has GPS
+                let geoLabel = reverseGeocodeIfNeeded(upload: upload)
+                print("✓\(geoLabel)")
             } else {
                 results.failed += 1
                 let reason = upload.errorMessage ?? "Unknown error"
@@ -324,7 +333,9 @@ class ExportUploadPipeline {
             statusCode: nil,
             errorCode: "UPLOAD_FAILED",
             errorMessage: "Upload failed",
-            retriable: false
+            retriable: false,
+            photoId: nil,
+            gps: nil
         )
         while attempt <= maxRetries {
             let key = "\(assetId)-\(attempt)"
@@ -341,7 +352,9 @@ class ExportUploadPipeline {
                 statusCode: last.statusCode,
                 errorCode: "NETWORK_RETRY_EXHAUSTED",
                 errorMessage: last.errorMessage,
-                retriable: false
+                retriable: false,
+                photoId: nil,
+                gps: nil
             )
         }
         return last
@@ -351,6 +364,25 @@ class ExportUploadPipeline {
         guard let data = try? Data(contentsOf: URL(fileURLWithPath: path)) else { return nil }
         let digest = SHA256.hash(data: data)
         return digest.map { String(format: "%02x", $0) }.joined()
+    }
+
+    // MARK: - Reverse geocoding
+
+    /// If the upload response includes GPS and we have a Google Maps API key,
+    /// reverse-geocode and update the photo's locationName. Returns a label for the log line.
+    private func reverseGeocodeIfNeeded(upload: UploadResponse) -> String {
+        guard let apiKey = googleMapsAPIKey, !apiKey.isEmpty,
+              let photoId = upload.photoId,
+              let gps = upload.gps else { return "" }
+
+        if let name = session.reverseGeocode(lat: gps.lat, lng: gps.lng, apiKey: apiKey) {
+            let ok = session.updatePhotoMetadata(collection: collection, photoId: photoId, updates: ["locationName": name])
+            if ok {
+                geocodedCount += 1
+                return " → \(name)"
+            }
+        }
+        return ""
     }
 
     // MARK: - Photos.framework export (local library assets only)
@@ -418,9 +450,53 @@ class ExportUploadPipeline {
         }
 
         if errorMsg == nil && FileManager.default.fileExists(atPath: exportPath) {
+            // Convert HEIC/HEIF to JPEG for server compatibility
+            let lowerExt = (exportPath as NSString).pathExtension.lowercased()
+            if lowerExt == "heic" || lowerExt == "heif" {
+                if let jpegPath = convertToJPEG(heicPath: exportPath) {
+                    return (jpegPath, nil)
+                }
+                return (nil, "HEIC to JPEG conversion failed")
+            }
             return (exportPath, nil)
         }
         return (nil, errorMsg ?? "Export produced no file")
+    }
+
+    /// Convert HEIC/HEIF file to JPEG using macOS native ImageIO.
+    /// Returns the path to the new JPEG file, or nil on failure.
+    private func convertToJPEG(heicPath: String, quality: CGFloat = 0.92) -> String? {
+        let sourceURL = URL(fileURLWithPath: heicPath)
+        guard let source = CGImageSourceCreateWithURL(sourceURL as CFURL, nil),
+              let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+            return nil
+        }
+
+        let jpegPath = (heicPath as NSString).deletingPathExtension + ".jpg"
+        let destURL = URL(fileURLWithPath: jpegPath)
+        guard let dest = CGImageDestinationCreateWithURL(destURL as CFURL, UTType.jpeg.identifier as CFString, 1, nil) else {
+            return nil
+        }
+
+        // Preserve EXIF metadata from original
+        let sourceProperties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil)
+        var options: [CFString: Any] = [kCGImageDestinationLossyCompressionQuality: quality]
+        if let props = sourceProperties {
+            options[kCGImageDestinationMergeMetadata] = true
+            // Merge all source properties
+            for (key, value) in props as! [CFString: Any] {
+                options[key] = value
+            }
+        }
+
+        CGImageDestinationAddImage(dest, cgImage, options as CFDictionary)
+        guard CGImageDestinationFinalize(dest) else {
+            return nil
+        }
+
+        // Remove original HEIC file
+        try? FileManager.default.removeItem(atPath: heicPath)
+        return jpegPath
     }
 
     private func extensionFromUTI(_ uti: String?) -> String? {
