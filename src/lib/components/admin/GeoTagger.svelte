@@ -332,8 +332,7 @@
 	}
 	.grid-item img {
 		width: 100%;
-		height: auto;
-		max-height: 160px;
+		aspect-ratio: 4/3;
 		object-fit: contain;
 		background: #f5f5f5;
 	}
