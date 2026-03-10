@@ -202,6 +202,9 @@
 						onclick={() => toggleSelect(photo.id)}
 					>
 						<img src={photo.thumbnail} alt={photo.filename} loading="lazy" />
+						{#if photo.species || photo.filename}
+							<span class="photo-label">{photo.species || photo.filename}</span>
+						{/if}
 					</button>
 				{/each}
 			</div>
@@ -261,14 +264,14 @@
 		gap: 0;
 	}
 	.geotagger-left {
-		width: 40%;
+		width: 45%;
 		display: flex;
 		flex-direction: column;
 		border-right: 1px solid var(--color-border);
 		overflow: hidden;
 	}
 	.geotagger-right {
-		width: 60%;
+		width: 55%;
 		display: flex;
 		flex-direction: column;
 	}
@@ -306,29 +309,43 @@
 	}
 	.photo-grid {
 		display: grid;
-		grid-template-columns: repeat(3, 1fr);
-		gap: 6px;
+		grid-template-columns: repeat(2, 1fr);
+		gap: 8px;
 		padding: 12px;
 		overflow-y: auto;
 		flex: 1;
 	}
 	.grid-item {
-		aspect-ratio: 1;
+		display: flex;
+		flex-direction: column;
 		overflow: hidden;
 		border-radius: var(--radius-sm);
 		border: 3px solid transparent;
 		cursor: pointer;
 		padding: 0;
-		background: var(--color-surface);
+		background: #f5f5f5;
 		transition: border-color 0.1s;
 	}
 	.grid-item.selected {
 		border-color: var(--color-primary);
+		background: #e8f5e9;
 	}
 	.grid-item img {
 		width: 100%;
-		height: 100%;
-		object-fit: cover;
+		height: auto;
+		max-height: 160px;
+		object-fit: contain;
+		background: #f5f5f5;
+	}
+	.photo-label {
+		display: block;
+		padding: 3px 6px;
+		font-size: 0.7rem;
+		color: var(--color-text-muted);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		text-align: center;
 	}
 	.search-bar {
 		padding: 8px 12px;
