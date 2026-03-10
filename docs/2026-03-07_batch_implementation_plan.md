@@ -140,3 +140,4 @@ Phase 2 verification:
 
 Phase 3 verification:
 - Admin → select multiple photos → "Delete Selected" → confirmation → photos deleted
+| (task #15) Switch to Gemini 2.0 Flash | P2 | Replace GPT-4.1-mini with Gemini for bird ID — 50x cheaper, comparable quality |
