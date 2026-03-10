@@ -4,13 +4,13 @@
  * Returns null on any error — same pattern as reverseGeocode.
  */
 import OpenAI from 'openai';
-import { env } from '$env/dynamic/private';
+import { OPENAI_API_KEY } from '$env/static/private';
 import { SPECIES_PROMPT, SPECIES_MODEL, parseSpeciesResponse } from '$lib/vision-prompt.js';
 
 let client = null;
 
 function getClient() {
-	if (!client) client = new OpenAI({ apiKey: env.OPENAI_API_KEY });
+	if (!client) client = new OpenAI({ apiKey: OPENAI_API_KEY });
 	return client;
 }
 
@@ -20,7 +20,7 @@ function getClient() {
  * @returns {Promise<{ species: string, scientificName: string|null, confidence: string }|null>}
  */
 export async function identifySpecies(imageUrl) {
-	if (!env.OPENAI_API_KEY) {
+	if (!OPENAI_API_KEY) {
 		console.warn('Vision: OPENAI_API_KEY not configured');
 		return null;
 	}
