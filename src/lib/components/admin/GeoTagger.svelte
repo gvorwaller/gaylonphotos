@@ -194,22 +194,16 @@
 				All photos have been geo-tagged!
 			</div>
 		{:else}
-			<div class="photo-grid">
+			<div class="photo-list">
 				{#each untaggedPhotos as photo (photo.id)}
-					<!-- svelte-ignore a11y_no_static_element_interactions -->
-					<div
-						class="grid-item"
+					<button
+						class="photo-card"
 						class:selected={selectedIds.has(photo.id)}
 						onclick={() => toggleSelect(photo.id)}
-						role="button"
-						tabindex="0"
-						onkeydown={(e) => e.key === 'Enter' && toggleSelect(photo.id)}
 					>
 						<img src={photo.thumbnail} alt={photo.filename} loading="lazy" />
-						{#if photo.species || photo.filename}
-							<span class="photo-label">{photo.species || photo.filename}</span>
-						{/if}
-					</div>
+						<span class="photo-label">{photo.species || photo.filename}</span>
+					</button>
 				{/each}
 			</div>
 		{/if}
@@ -311,44 +305,48 @@
 		font-weight: 600;
 		font-size: 1rem;
 	}
-	.photo-grid {
-		display: grid;
-		grid-template-columns: repeat(2, 1fr);
-		gap: 8px;
-		padding: 12px;
+	.photo-list {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		padding: 8px;
 		overflow-y: auto;
 		flex: 1;
 	}
-	.grid-item {
+	.photo-card {
 		display: flex;
-		flex-direction: column;
+		align-items: center;
+		gap: 10px;
+		padding: 4px;
+		border: 2px solid transparent;
 		border-radius: var(--radius-sm);
-		border: 3px solid transparent;
+		background: #f8f8f8;
 		cursor: pointer;
-		padding: 0;
-		background: #f5f5f5;
 		transition: border-color 0.1s;
-		overflow: hidden;
+		text-align: left;
+		flex-shrink: 0;
 	}
-	.grid-item.selected {
+	.photo-card.selected {
 		border-color: var(--color-primary);
 		background: #e8f5e9;
 	}
-	.grid-item img {
-		width: 100%;
-		aspect-ratio: 4/3;
-		object-fit: contain;
-		background: #f5f5f5;
+	.photo-card:hover {
+		background: #f0f0f0;
+	}
+	.photo-card img {
+		width: 120px;
+		height: 80px;
+		object-fit: cover;
+		border-radius: 4px;
+		flex-shrink: 0;
 	}
 	.photo-label {
-		display: block;
-		padding: 3px 6px;
-		font-size: 0.7rem;
-		color: var(--color-text-muted);
-		white-space: nowrap;
+		font-size: 0.8rem;
+		color: var(--color-text);
 		overflow: hidden;
 		text-overflow: ellipsis;
-		text-align: center;
+		white-space: nowrap;
+		flex: 1;
 	}
 	.search-bar {
 		padding: 8px 12px;
@@ -413,7 +411,7 @@
 			background: var(--color-surface);
 			z-index: 1;
 		}
-		.photo-grid {
+		.photo-list {
 			overflow-y: visible;
 		}
 		.geotagger-right {
