@@ -196,16 +196,20 @@
 		{:else}
 			<div class="photo-grid">
 				{#each untaggedPhotos as photo (photo.id)}
-					<button
+					<!-- svelte-ignore a11y_no_static_element_interactions -->
+					<div
 						class="grid-item"
 						class:selected={selectedIds.has(photo.id)}
 						onclick={() => toggleSelect(photo.id)}
+						role="button"
+						tabindex="0"
+						onkeydown={(e) => e.key === 'Enter' && toggleSelect(photo.id)}
 					>
 						<img src={photo.thumbnail} alt={photo.filename} loading="lazy" />
 						{#if photo.species || photo.filename}
 							<span class="photo-label">{photo.species || photo.filename}</span>
 						{/if}
-					</button>
+					</div>
 				{/each}
 			</div>
 		{/if}
@@ -318,13 +322,13 @@
 	.grid-item {
 		display: flex;
 		flex-direction: column;
-		overflow: hidden;
 		border-radius: var(--radius-sm);
 		border: 3px solid transparent;
 		cursor: pointer;
 		padding: 0;
 		background: #f5f5f5;
 		transition: border-color 0.1s;
+		overflow: hidden;
 	}
 	.grid-item.selected {
 		border-color: var(--color-primary);
