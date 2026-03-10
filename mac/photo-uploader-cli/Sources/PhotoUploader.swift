@@ -62,7 +62,7 @@ struct PhotoUploader: ParsableCommand {
     /// so Photos.framework can service its XPC/iCloud callbacks.
     ///
     /// Returns the process exit code (0 = success, 1 = failure).
-    func execute(session: APISession) -> Int32 {
+    func execute(session: APISession, googleMapsAPIKey: String? = nil) -> Int32 {
         if retry && (resume == nil || resume?.isEmpty == true) {
             printError("RETRY_REQUIRES_RUN_ID — pass --resume <run-id> with --retry")
             return 1
@@ -98,7 +98,8 @@ struct PhotoUploader: ParsableCommand {
             downloadOriginals: downloadOriginals,
             maxRetries: maxRetries,
             exportTimeoutSec: exportTimeoutSec,
-            targetAssetIDs: retry ? (try? runWorkspace.failedAssetIDs()) : nil
+            targetAssetIDs: retry ? (try? runWorkspace.failedAssetIDs()) : nil,
+            googleMapsAPIKey: googleMapsAPIKey
         )
 
         do {
@@ -135,6 +136,9 @@ struct PhotoUploader: ParsableCommand {
         print("Uploaded:      \(results.succeeded)")
         print("Failed:        \(results.failed)")
         print("Skipped:       \(results.skipped)")
+        if pipeline.geocodedCount > 0 {
+            print("Geocoded:      \(pipeline.geocodedCount)")
+        }
 
         if !results.failures.isEmpty {
             print("\nFailed files:")

@@ -1,6 +1,35 @@
 import AppKit
 import ArgumentParser
 
+// MARK: - .env loader
+
+/// Load a value from the project's .env file. Searches upward from the CLI binary's
+/// location, or from the current working directory, for a .env file.
+func loadEnvValue(_ key: String) -> String? {
+    // Check environment first (set by upload-photos.sh via `set -a; source .env`)
+    if let val = ProcessInfo.processInfo.environment[key], !val.isEmpty {
+        return val
+    }
+    // Try to find .env in parent directories
+    var dir = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+    for _ in 0..<5 {
+        let envFile = dir.appendingPathComponent(".env")
+        if let contents = try? String(contentsOf: envFile, encoding: .utf8) {
+            for line in contents.split(separator: "\n") {
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                if trimmed.hasPrefix("#") || trimmed.isEmpty { continue }
+                let parts = trimmed.split(separator: "=", maxSplits: 1)
+                if parts.count == 2 && parts[0].trimmingCharacters(in: .whitespaces) == key {
+                    return parts[1].trimmingCharacters(in: .whitespaces)
+                }
+            }
+            return nil // Found .env but key not present
+        }
+        dir = dir.deletingLastPathComponent()
+    }
+    return nil
+}
+
 // MARK: - NSApplication delegate
 
 /// Photos.framework (PHImageManager) requires NSApplication's event loop to service
@@ -10,15 +39,17 @@ import ArgumentParser
 class PhotoUploaderDelegate: NSObject, NSApplicationDelegate {
     private let command: PhotoUploader
     private let session: APISession
+    private let googleMapsAPIKey: String?
 
-    init(command: PhotoUploader, session: APISession) {
+    init(command: PhotoUploader, session: APISession, googleMapsAPIKey: String? = nil) {
         self.command = command
         self.session = session
+        self.googleMapsAPIKey = googleMapsAPIKey
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         DispatchQueue.global(qos: .userInitiated).async { [self] in
-            let exitCode = command.execute(session: session)
+            let exitCode = command.execute(session: session, googleMapsAPIKey: googleMapsAPIKey)
             DispatchQueue.main.async {
                 NSApp.terminate(nil)
             }
@@ -114,10 +145,16 @@ guard session.login(username: username, password: password) else {
 }
 print("Authenticated ✓")
 
-// 5. Start NSApplication event loop — Photos.framework needs this running.
+// 5. Load Google Maps API key from .env for reverse geocoding
+let googleMapsAPIKey = loadEnvValue("PUBLIC_GOOGLE_MAPS_API_KEY")
+if let key = googleMapsAPIKey, !key.isEmpty {
+    print("Geocoding:  enabled")
+}
+
+// 6. Start NSApplication event loop — Photos.framework needs this running.
 //    The delegate dispatches pipeline work to a background queue, then terminates.
 let app = NSApplication.shared
 app.setActivationPolicy(.accessory)  // No dock icon, no menu bar
-let delegate = PhotoUploaderDelegate(command: command, session: session)
+let delegate = PhotoUploaderDelegate(command: command, session: session, googleMapsAPIKey: googleMapsAPIKey)
 app.delegate = delegate
 app.run()
