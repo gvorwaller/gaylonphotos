@@ -69,6 +69,11 @@ export async function POST({ request }) {
 			continue;
 		}
 
+		if (identification.confidence !== 'high') {
+			results.push({ photoId, status: 'skipped', reason: `Low confidence: ${identification.species} (${identification.confidence})` });
+			continue;
+		}
+
 		const updates = {
 			species: identification.species,
 			scientificName: identification.scientificName,
