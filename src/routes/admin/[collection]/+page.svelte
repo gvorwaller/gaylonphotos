@@ -8,9 +8,16 @@
 
 	let photos = $state([]);
 
-	// Re-sync photos when navigating between collections
+	// Re-sync photos when navigating between collections, sorted by date
 	$effect(() => {
-		photos = data.photos ?? [];
+		const sorted = [...(data.photos ?? [])];
+		sorted.sort((a, b) => {
+			if (!a.date && !b.date) return 0;
+			if (!a.date) return 1;
+			if (!b.date) return -1;
+			return a.date.localeCompare(b.date);
+		});
+		photos = sorted;
 	});
 
 	function handleUploaded(photo) {

@@ -78,6 +78,9 @@
 				<p class="lightbox-desc">{displayPhoto.description}</p>
 			{/if}
 			<div class="lightbox-meta">
+				{#if displayPhoto.species}
+					<span class="lightbox-species">{displayPhoto.species}</span>
+				{/if}
 				{#if displayPhoto.locationName}
 					<span>{displayPhoto.locationName}</span>
 				{/if}
@@ -174,5 +177,11 @@
 		justify-content: center;
 		font-size: 0.8rem;
 		opacity: 0.7;
+	}
+	.lightbox-species {
+		color: #fff;
+		font-weight: 600;
+		font-style: italic;
+		opacity: 1;
 	}
 </style>
