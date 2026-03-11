@@ -242,9 +242,10 @@
 	}
 	.editor-preview img {
 		width: 100px;
-		height: 100px;
-		object-fit: cover;
+		max-height: 120px;
+		object-fit: contain;
 		border-radius: var(--radius-sm);
+		background: #f5f5f5;
 	}
 	.editor-meta {
 		min-width: 0;

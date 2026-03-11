@@ -1,7 +1,9 @@
 # Batch Implementation: Open Tasks (P1-P3)
 
 ## Context
-14 open td tasks spanning bug fixes, UX improvements, and new features. Organized into 4 phases by dependency and complexity — quick fixes first, then progressively larger changes. Each phase can be committed and deployed independently.
+Open td tasks spanning bug fixes, UX improvements, and new features. Organized into phases by dependency and complexity — quick fixes first, then progressively larger changes. Each phase can be committed and deployed independently.
+
+**Last updated:** 2026-03-11
 
 ---
 
@@ -118,6 +120,13 @@ filtered.sort((a, b) => {
 | td-2f97fe Switch geocoding to Google | P3 | Replace Nominatim with Google Maps API |
 | (task #13) Video clip support | P2 | Support short video uploads + playback |
 | (task #14) Bulk reverse-geocode UI | P2 | Admin button to geocode photos with GPS but no place name |
+| td-c71ffe / (task #15) Gemini 2.0 Flash | P2 | Replace GPT-4.1-mini with Gemini for bird ID — 50x cheaper |
+| td-0b7c22 Collapsible species list | P2 | Hide species grid behind expand bar on birds page |
+| td-6189db Species in photo detail | P2 | Show species name in expanded/lightbox photo view |
+| td-a7415a Family history search | 2c | Duplicate of td-8a9992 — merge |
+| td-617191 Family tree display | P2 | Add family tree visualization to family history section |
+| td-58011e Bulk reverse-geocode | — | **DONE** (858 photos geocoded, 2026-03-10) |
+| td-73c604 Shared album photos | — | **DONE** (workaround: copy to local album) |
 
 ---
 
@@ -140,4 +149,3 @@ Phase 2 verification:
 
 Phase 3 verification:
 - Admin → select multiple photos → "Delete Selected" → confirmation → photos deleted
-| (task #15) Switch to Gemini 2.0 Flash | P2 | Replace GPT-4.1-mini with Gemini for bird ID — 50x cheaper, comparable quality |
