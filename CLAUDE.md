@@ -30,6 +30,9 @@ node build/index.js
 # Create admin credentials
 node scripts/setup-admin.js
 
+# Deploy to production (ALWAYS use this — never manual SSH + build)
+./scripts/deploy-to-DO.sh
+
 # Bulk photo import from local folder
 node scripts/ingest-photos.js <collection-slug> <folder-path>
 ```

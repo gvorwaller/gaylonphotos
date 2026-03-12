@@ -7,16 +7,13 @@ Open td tasks spanning bug fixes, UX improvements, and new features. Organized i
 
 ---
 
-## Phase 1: Quick Fixes (P1 bugs + easy wins)
-*~30 min. All are small, isolated changes.*
+## ~~Phase 1: Quick Fixes~~ DONE (deployed 2026-03-11)
 
-### 1a. Admin photo thumbnails show cropped slice (td-75d4a3)
-**File:** `src/lib/components/admin/PhotoEditor.svelte:243-248`
-**Fix:** Change `object-fit: cover` to `object-fit: contain` and set `background: #f5f5f5` so the full photo is visible in the admin preview. May also need to adjust the fixed `height: 100px` to `max-height: 120px` with `width: auto` for better fit.
-
-### 1b. Bird species not showing in photo detail (td-96f8b8)
-**File:** `src/lib/components/common/PhotoDetail.svelte:36`
-**Investigation:** The species display code exists at line 36 (`if (photo.species) items.push(...)`). This may be a data issue — species not persisted to photos.json, or the route not loading the field. Check `data/birds/photos.json` for species fields, and verify `src/routes/[collection]/photo/[id]/+page.server.js` passes the full photo object. Also show `scientificName` in italics if present.
+- ~~1a. Admin photo thumbnails (td-75d4a3)~~ — object-fit: contain
+- ~~1b. Bird species in photo detail (td-96f8b8)~~ — already working, verified
+- **1c. Fix ancestry husband/wife swap (td-7c2fdc, td-8118e1)** — STILL OPEN, moved to Phase 2
+- ~~1d. Sort photos by date (td-b5a684)~~ — date sort in public + admin pages
+- ~~td-6189db Species in lightbox~~ — added to Lightbox.svelte
 
 ### 1c. Fix ancestry husband/wife swap (td-7c2fdc, td-8118e1)
 **File:** `data/scandinavia-2023/ancestry.json`
@@ -26,19 +23,6 @@ Open td tasks spanning bug fixes, UX improvements, and new features. Organized i
 2. Swap `rootPersonIds[0]` and `rootPersonIds[1]`
 3. For each person: swap lineage prefixes (`paternal` ↔ `wife-paternal`, `maternal` ↔ `wife-maternal`, `self` ↔ `wife-self`, `both` ↔ `wife-both`)
 4. Update `mergeHistory[0].lineagePrefix` from `"wife"` to indicate it was the original primary
-
-### 1d. Sort photos by date (td-b5a684)
-**File:** `src/routes/[collection]/+page.svelte:57-71`
-**Fix:** In the `displayPhotos` derived, sort by `photo.date` (ISO string, sorts lexicographically). Photos without dates go to the end. Apply to both the public collection page and admin page (`src/routes/admin/[collection]/+page.svelte`).
-```js
-// After filtering, before return:
-filtered.sort((a, b) => {
-  if (!a.date && !b.date) return 0;
-  if (!a.date) return 1;
-  if (!b.date) return -1;
-  return a.date.localeCompare(b.date);
-});
-```
 
 ---
 
@@ -100,33 +84,31 @@ filtered.sort((a, b) => {
 
 ## Task Disposition Summary
 
-| Task | Phase | Action |
-|------|-------|--------|
-| td-75d4a3 Photo thumbnails | 1a | Fix CSS object-fit |
-| td-96f8b8 Species in detail | 1b | Debug data/display issue |
-| td-7c2fdc Gaylon as wife | 1c | Swap ancestry data |
-| td-8118e1 Names in body | 1c | Same fix as 7c2fdc |
-| td-b5a684 Sort by date | 1d | Add sort to displayPhotos |
-| td-bf5450 Map filter birds/surf | 2a | Verify already works |
-| td-59853b Map location search | 2b | Add Places Autocomplete to Map.svelte |
-| td-8a9992 Ancestry name search | 2c | Add search to AncestryPanel |
-| td-286da1 Batch delete UI | 3a | Multi-select + bulk delete |
-| td-63cf89 Delete duplicates | — | Moved to P4 by user |
-| td-73c604 Shared album photos | — | Resolved: use local album, not shared |
-| td-77ddd9 Perceptual hash dedup | — | Future (already detailed in td) |
-| td-fa3441 Itinerary polyline | 4b | Debug timing issue |
-| td-0a402a Family locations | 4a | Data cleanup script |
-| td-3b705b AI location recognition | P2 | Gemini vision API for photos without GPS |
-| td-2f97fe Switch geocoding to Google | P3 | Replace Nominatim with Google Maps API |
-| (task #13) Video clip support | P2 | Support short video uploads + playback |
-| (task #14) Bulk reverse-geocode UI | P2 | Admin button to geocode photos with GPS but no place name |
-| td-c71ffe / (task #15) Gemini 2.0 Flash | P2 | Replace GPT-4.1-mini with Gemini for bird ID — 50x cheaper |
-| td-0b7c22 Collapsible species list | P2 | Hide species grid behind expand bar on birds page |
-| td-6189db Species in photo detail | P2 | Show species name in expanded/lightbox photo view |
-| td-a7415a Family history search | 2c | Duplicate of td-8a9992 — merge |
-| td-617191 Family tree display | P2 | Add family tree visualization to family history section |
-| td-58011e Bulk reverse-geocode | — | **DONE** (858 photos geocoded, 2026-03-10) |
-| td-73c604 Shared album photos | — | **DONE** (workaround: copy to local album) |
+| Task | Status | Action |
+|------|--------|--------|
+| ~~td-75d4a3 Photo thumbnails~~ | **DONE** | object-fit: contain |
+| ~~td-96f8b8 Species in detail~~ | **DONE** | Already working, verified |
+| ~~td-b5a684 Sort by date~~ | **DONE** | Date sort in public + admin |
+| ~~td-6189db Species in lightbox~~ | **DONE** | Added to Lightbox.svelte |
+| ~~td-58011e Bulk reverse-geocode~~ | **DONE** | 858 photos geocoded, 2026-03-10 |
+| ~~td-73c604 Shared album photos~~ | **DONE** | Workaround: copy to local album |
+| td-7c2fdc Gaylon as wife | Open | Swap ancestry lineage data |
+| td-8118e1 Names in body | Open | Same fix as 7c2fdc |
+| ~~td-bf5450 Map filter birds/surf~~ | **DONE** | Already working, verified |
+| td-0b7c22 Collapsible species list | Open | Hide species grid behind expand bar |
+| td-e259fc Map marker photo preview | Open | Show photo thumbnail on marker click for birds/surfing |
+| td-59853b Map location search | Open | Add Places Autocomplete to Map.svelte |
+| td-8a9992 / td-a7415a Ancestry search | Open | Add search to AncestryPanel (dupes) |
+| td-286da1 Batch delete UI | Open | Multi-select + bulk delete |
+| td-63cf89 Delete duplicates | Open | Moved to P4 by user |
+| td-77ddd9 Perceptual hash dedup | Open | Future |
+| td-c71ffe Gemini 2.0 Flash | Open | Replace GPT-4.1-mini for bird ID |
+| td-3b705b AI location recognition | Open | Gemini vision for photos without GPS |
+| td-617191 Family tree display | Open | Family tree visualization |
+| td-fa3441 Itinerary polyline | Open | Debug timing issue |
+| td-0a826d / (task #13) Video support | Open | Video uploads + playback |
+| td-0a402a Family locations | Open | Data cleanup script |
+| td-2f97fe Switch geocoding to Google | Open | Replace Nominatim with Google Maps API |
 
 ---
 
