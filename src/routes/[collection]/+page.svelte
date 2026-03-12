@@ -141,7 +141,6 @@
 		</section>
 
 		<section style="margin-top: 32px;">
-			<h2 class="section-label">Species</h2>
 			<SpeciesGrid
 				photos={data.photos}
 				onspeciesclick={(species) => filterSpecies = species}

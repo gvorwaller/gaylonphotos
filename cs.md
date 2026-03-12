@@ -46,6 +46,9 @@ When diagnosing errors, follow this methodology instead of guessing:
 - **Domain**: `gaylon.photos` — proxied through Cloudflare (HTTP only, NOT SSH)
 - **Deploy script**: `./scripts/deploy-to-DO.sh` — pushes, pulls on droplet, builds, restarts PM2
 
+### Deploying
+**Always use `./scripts/deploy-to-DO.sh` to deploy.** Never manually SSH and run build commands. The script handles push, pull, install, build, PM2 restart, and health check.
+
 ### Critical: SSH Is NOT the Domain
 `gaylon.photos` resolves to Cloudflare IPs, not the droplet. **Always use the IP `134.199.211.199` for SSH.** The deploy script already does this correctly — follow its example.
 
@@ -105,6 +108,8 @@ Admin sessions live in a Map in the Node process. Every PM2 restart (including d
 - **2026-03-07**: Assumed user was on mobile from a screenshot — they were on Mac with a narrow browser window. Never assume the user's device.
 - **2026-03-07**: Assumed session was expired without evidence — the user had already re-logged in. Verify before diagnosing.
 - **2026-03-07**: Three rounds of upload fixes needed because assumptions replaced investigation — empty MIME types from Apple Photos weren't caught until actual file data was examined.
+
+- **2026-03-11**: Tried manual `ssh root@gaylon.photos` + `npm run build` to deploy — timed out, then host key failure. Deploy script `./scripts/deploy-to-DO.sh` handles everything correctly. Never deploy manually.
 
 ### Key Principle
 > Assumptions are the enemy. Read the code. Read the config. Test the layer. Only then diagnose.
