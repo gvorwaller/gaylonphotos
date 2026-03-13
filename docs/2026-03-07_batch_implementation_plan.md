@@ -107,6 +107,7 @@ Open td tasks spanning bug fixes, UX improvements, and new features. Organized i
 | td-617191 Family tree display | Open | Family tree visualization |
 | td-fa3441 Itinerary polyline | Open | Debug timing issue |
 | td-0a826d / (task #13) Video support | Open | Video uploads + playback |
+| td-918913 Ancestry place geo-tagger | Open | Map UI to assign lat/lng to unresolved ancestry places (P1) |
 | td-0a402a Family locations | Open | Data cleanup script |
 | td-2f97fe Switch geocoding to Google | Open | Replace Nominatim with Google Maps API |
 

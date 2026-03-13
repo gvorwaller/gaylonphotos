@@ -181,6 +181,17 @@
 	function getPersonById(id) {
 		return personMap.get(id);
 	}
+
+	function displayLineagePath(path) {
+		if (!path) return '';
+		if (path.startsWith("Wife's") && mergedName) {
+			return path.replace("Wife's", mergedName + "'s");
+		}
+		if ((path.startsWith("Father's") || path.startsWith("Mother's")) && primaryName) {
+			return primaryName + "'s " + path[0].toLowerCase() + path.slice(1);
+		}
+		return path;
+	}
 </script>
 
 <div class="ancestry-panel">
@@ -428,7 +439,7 @@
 				{/if}
 			</div>
 			{#if person.lineagePath}
-				<div class="line-person-path">{person.lineagePath}</div>
+				<div class="line-person-path">{displayLineagePath(person.lineagePath)}</div>
 			{/if}
 			{#if expandedPersonId === person.id}
 				<div class="person-detail" transition:slide={{ duration: 150 }}>
@@ -447,7 +458,7 @@
 				<span class="detail-gender">{person.gender}</span>
 			{/if}
 			{#if person.lineagePath}
-				<span class="detail-lineage">{person.lineagePath}</span>
+				<span class="detail-lineage">{displayLineagePath(person.lineagePath)}</span>
 			{/if}
 		</div>
 		{#if person.facts?.length > 0}
