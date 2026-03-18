@@ -15,6 +15,7 @@
 	let expanded = $state(false);
 	let activeTab = $state('place');
 	let expandedPersonId = $state(null);
+	let ancestorSearch = $state('');
 
 	// ─── Map-viewport filtering ─────────────────────────────
 	let visiblePlaces = $derived.by(() => {
@@ -34,19 +35,36 @@
 	let visiblePersonIds = $derived(
 		new Set(visiblePlaces.flatMap((p) => (p.events || []).map((e) => e.personId)))
 	);
-	let visiblePersons = $derived(
-		(ancestry?.persons || []).filter((p) => visiblePersonIds.has(p.id))
-	);
+	let visiblePersons = $derived.by(() => {
+		let persons = (ancestry?.persons || []).filter((p) => visiblePersonIds.has(p.id));
+		if (ancestorSearch) {
+			const q = ancestorSearch.toLowerCase();
+			persons = persons.filter((p) =>
+				p.name.toLowerCase().includes(q) ||
+				(p.birthPlace && p.birthPlace.toLowerCase().includes(q)) ||
+				(p.deathPlace && p.deathPlace.toLowerCase().includes(q))
+			);
+		}
+		return persons;
+	});
 
 	// ─── Derived data for tabs ──────────────────────────────
 
-	// By Place: sorted by country then name
-	let placesSorted = $derived(
-		[...visiblePlaces].sort((a, b) => {
+	// By Place: sorted by country then name, filtered by search if active
+	let visiblePersonIdSet = $derived(new Set(visiblePersons.map((p) => p.id)));
+	let placesSorted = $derived.by(() => {
+		let places = visiblePlaces;
+		if (ancestorSearch) {
+			// Only show places that have events for matching persons
+			places = places.filter((p) =>
+				(p.events || []).some((e) => visiblePersonIdSet.has(e.personId))
+			);
+		}
+		return [...places].sort((a, b) => {
 			const ca = (a.country || '').localeCompare(b.country || '');
 			return ca !== 0 ? ca : a.name.localeCompare(b.name);
-		})
-	);
+		});
+	});
 
 	// By Family Line: group visible persons by lineage
 	// "self" and "both" appear in both paternal/maternal columns for the primary root
@@ -229,6 +247,21 @@
 					class:active={activeTab === 'generation'}
 					onclick={() => (activeTab = 'generation')}
 				>By Generation</button>
+			</div>
+
+			<!-- Search -->
+			<div class="ancestry-search-bar">
+				<input
+					type="text"
+					class="ancestry-search-input"
+					placeholder="Search ancestors by name or place..."
+					bind:value={ancestorSearch}
+				/>
+				{#if ancestorSearch}
+					<button class="ancestry-search-clear" onclick={() => ancestorSearch = ''}>
+						&times;
+					</button>
+				{/if}
 			</div>
 
 			<!-- Tab content -->
@@ -558,6 +591,39 @@
 	.ancestry-tab.active {
 		color: var(--color-primary);
 		border-bottom-color: var(--color-primary);
+	}
+
+	/* ─── Search Bar ────────────────────────────── */
+	.ancestry-search-bar {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		padding: 10px 20px;
+		border-bottom: 1px solid var(--color-border);
+	}
+	.ancestry-search-input {
+		flex: 1;
+		padding: 7px 12px;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		font-size: 0.85rem;
+		font-family: inherit;
+		outline: none;
+	}
+	.ancestry-search-input:focus {
+		border-color: var(--color-primary);
+	}
+	.ancestry-search-clear {
+		background: none;
+		border: none;
+		font-size: 1.2rem;
+		color: var(--color-text-muted);
+		cursor: pointer;
+		padding: 0 4px;
+		line-height: 1;
+	}
+	.ancestry-search-clear:hover {
+		color: var(--color-text);
 	}
 
 	/* ─── Content Area ───────────────────────────── */

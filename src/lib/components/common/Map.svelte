@@ -28,14 +28,17 @@
 		onmarkerclick = null,
 		onmapready = null,
 		onboundschange = null,
-		infoWindowEnabled = false
+		infoWindowEnabled = false,
+		searchable = false
 	} = $props();
 
 	let mapContainer;
+	let searchInput = $state(null);
 	let map = $state(null);
 	let googleMarkers = []; // Array of { marker, handler } objects
 	let googlePolyline = null;
 	let infoWindowInstance = null;
+	let searchAutocomplete = null;
 	let apiLoaded = $state(false);
 	let initialFitDone = false; // Not reactive — one-shot flag read inside effect
 
@@ -139,6 +142,27 @@
 		if (onmapready) {
 			onmapready(map);
 		}
+	});
+
+	// Places Autocomplete for search overlay
+	$effect(() => {
+		if (!searchable || !map || !searchInput || !window.google?.maps?.places) return;
+		if (searchAutocomplete) return;
+
+		searchAutocomplete = new google.maps.places.Autocomplete(searchInput, {
+			fields: ['geometry', 'name']
+		});
+		searchAutocomplete.bindTo('bounds', map);
+		searchAutocomplete.addListener('place_changed', () => {
+			const place = searchAutocomplete.getPlace();
+			if (!place.geometry?.location) return;
+			if (place.geometry.viewport) {
+				map.fitBounds(place.geometry.viewport);
+			} else {
+				map.setCenter(place.geometry.location);
+				map.setZoom(14);
+			}
+		});
 	});
 
 	// Sync markers (cleanup fn runs before re-execution, clearing old markers)
@@ -255,6 +279,16 @@
 </script>
 
 <div class="map-wrapper">
+	{#if searchable}
+		<div class="map-search">
+			<input
+				bind:this={searchInput}
+				type="text"
+				class="map-search-input"
+				placeholder="Search for a place..."
+			/>
+		</div>
+	{/if}
 	<div bind:this={mapContainer} class="map-container"></div>
 	{#if !apiLoaded}
 		<div class="map-loading">Loading map...</div>
@@ -272,6 +306,29 @@
 		width: 100%;
 		height: 100%;
 		border-radius: var(--radius-md, 8px);
+	}
+	.map-search {
+		position: absolute;
+		top: 10px;
+		left: 50%;
+		transform: translateX(-50%);
+		z-index: 1;
+		width: min(320px, calc(100% - 100px));
+	}
+	.map-search-input {
+		width: 100%;
+		padding: 8px 12px;
+		border: 1px solid var(--color-border, #e9ecef);
+		border-radius: var(--radius-sm, 4px);
+		font-size: 0.85rem;
+		font-family: inherit;
+		background: #fff;
+		box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+		outline: none;
+	}
+	.map-search-input:focus {
+		border-color: var(--color-primary, #28a745);
+		box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15), 0 0 0 3px rgba(40, 167, 69, 0.15);
 	}
 	.map-loading {
 		position: absolute;

@@ -3,7 +3,7 @@
 ## Context
 Open td tasks spanning bug fixes, UX improvements, and new features. Organized into phases by dependency and complexity — quick fixes first, then progressively larger changes. Each phase can be committed and deployed independently.
 
-**Last updated:** 2026-03-11
+**Last updated:** 2026-03-14
 
 ---
 
@@ -26,15 +26,19 @@ Open td tasks spanning bug fixes, UX improvements, and new features. Organized i
 
 ---
 
-## Phase 2: Map & Search Enhancements (P2 features)
-*~1-2 hrs. Adds search to maps and consistency to viewport filtering.*
+## ~~Phase 2A: Birds Page Polish~~ DONE (deployed 2026-03-13)
 
-### 2a. Map viewport filtering for wildlife + action (td-bf5450)
-**File:** `src/routes/[collection]/+page.svelte`
-**Status:** Already implemented! The `displayPhotos` derived at lines 57-71 applies `mapFilterActive && mapBounds` filtering for ALL collection types. The `handleBoundsChange` callback is wired to all three map components (lines 105, 132, 146). The "Filter by Map" button shows when `hasMapSection && hasGpsPhotos` (line 164) — this works for all types.
-**Verify:** Test in browser — navigate to birds and surfing collections, confirm the "Filter by Map" button appears and works. If it does, close this task as already-done.
+- ~~td-0b7c22 Collapsible species list~~ — collapsible panel with expand bar
+- ~~td-bf5450 Map filter birds/surf~~ — already working, verified
 
-### 2b. Add search-for-location on map (td-59853b)
+## ~~Phase 2B: Ancestry Lineage Names~~ DONE (deployed 2026-03-13)
+
+- ~~td-7c2fdc / td-8118e1 Ancestry lineage names~~ — displayLineagePath() shows Madonna/Gaylon instead of generic Father's/Mother's/Wife's
+
+## Phase 2C: Search & AI Geocoding (P1/P2 features)
+*Search on maps, search ancestors by name, AI-assisted geocoding for unresolved ancestry places.*
+
+### 2c-1. Add search-for-location on map (td-59853b)
 **Files:** `src/lib/components/common/Map.svelte`
 **Approach:** Add an optional `searchable` prop to Map.svelte. When true, render a search input overlaid on the map, wired to Google Places Autocomplete (already loaded — `libraries=marker,places` at Map.svelte:90). On place select, pan/zoom the map to the result.
 **Pattern:** Reuse the exact same Autocomplete pattern from `src/lib/components/admin/ItineraryEditor.svelte:27-65`.
@@ -42,10 +46,19 @@ Open td tasks spanning bug fixes, UX improvements, and new features. Organized i
 - Map.svelte: add `searchable = false` prop, conditionally render search input, init Places Autocomplete, pan on place_changed
 - `src/routes/[collection]/+page.svelte`: pass `searchable={true}` to ItineraryMap, SightingMap, SpotGallery (or directly to Map if those components forward the prop)
 
-### 2c. Add search for name in family history (td-8a9992)
+### 2c-2. Add search for name in family history (td-8a9992)
 **File:** `src/lib/components/travel/AncestryPanel.svelte`
 **Approach:** Add a search input in the ancestry panel header (below tabs). Filter `visiblePersons` by name match. On selecting a result, expand that person's detail and (if they have place events) pan the map to their location.
 **Pattern:** Reuse the filter logic from `src/lib/components/admin/AncestryEditor.svelte:166-185`.
+
+### 2c-3. AI geocoding for unresolved ancestry places (td-034625) [P1]
+**File:** New script + `data/scandinavia-2023/ancestry.json`
+**Description:** Use AI (or Google Geocoding API) to estimate lat/lng for ancestry places that have no coordinates — e.g. "Prussia" → approximate center of historical Prussia (now part of Poland/Russia).
+**Approach:** Write a script that:
+1. Reads ancestry.json, finds all places with no `lat`/`lng` (or flagged "not found")
+2. For each, calls Google Geocoding API (or Gemini) with the place name to get best-guess coordinates
+3. Updates ancestry.json with estimated coordinates, flagged as `"geocodeSource": "ai-estimate"` so they can be reviewed/corrected later via td-918913 (manual map geo-tagger)
+**Precursor to:** td-918913 (map UI for manual geo-tag corrections)
 
 ---
 
@@ -92,10 +105,10 @@ Open td tasks spanning bug fixes, UX improvements, and new features. Organized i
 | ~~td-6189db Species in lightbox~~ | **DONE** | Added to Lightbox.svelte |
 | ~~td-58011e Bulk reverse-geocode~~ | **DONE** | 858 photos geocoded, 2026-03-10 |
 | ~~td-73c604 Shared album photos~~ | **DONE** | Workaround: copy to local album |
-| td-7c2fdc Gaylon as wife | Open | Swap ancestry lineage data |
-| td-8118e1 Names in body | Open | Same fix as 7c2fdc |
+| ~~td-7c2fdc Ancestry lineage names~~ | **DONE** | displayLineagePath() with real names (2026-03-13) |
+| ~~td-8118e1 Names in body~~ | **DONE** | Same fix as 7c2fdc (2026-03-13) |
 | ~~td-bf5450 Map filter birds/surf~~ | **DONE** | Already working, verified |
-| td-0b7c22 Collapsible species list | Open | Hide species grid behind expand bar |
+| ~~td-0b7c22 Collapsible species list~~ | **DONE** | Collapsible panel with expand bar (2026-03-13) |
 | td-e259fc Map marker photo preview | Open | Show photo thumbnail on marker click for birds/surfing |
 | td-59853b Map location search | Open | Add Places Autocomplete to Map.svelte |
 | td-8a9992 / td-a7415a Ancestry search | Open | Add search to AncestryPanel (dupes) |
@@ -109,6 +122,7 @@ Open td tasks spanning bug fixes, UX improvements, and new features. Organized i
 | td-0a826d / (task #13) Video support | Open | Video uploads + playback |
 | td-918913 Ancestry place geo-tagger | Open | Map UI to assign lat/lng to unresolved ancestry places (P1) |
 | td-0a402a Family locations | Open | Data cleanup script |
+| td-034625 AI ancestry geocoding | Open | AI/API estimates for unresolved ancestry places (P1) |
 | td-2f97fe Switch geocoding to Google | Open | Replace Nominatim with Google Maps API |
 
 ---
