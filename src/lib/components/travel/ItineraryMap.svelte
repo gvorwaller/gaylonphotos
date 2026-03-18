@@ -200,6 +200,7 @@
 		{onboundschange}
 		infoWindowEnabled={true}
 		onmarkerclick={handleMarkerClick}
+		searchable={true}
 	/>
 </div>
 

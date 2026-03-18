@@ -63,6 +63,7 @@
 				zoom={4}
 				markers={markers}
 				{onboundschange}
+				searchable={true}
 				onmarkerclick={({ id }) => {
 					const spot = id.replace(/^spot-/, '');
 					scrollToSpot(spot);

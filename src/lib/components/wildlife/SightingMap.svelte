@@ -38,6 +38,7 @@
 		zoom={4}
 		{markers}
 		{onboundschange}
+		searchable={true}
 	/>
 </div>
 
