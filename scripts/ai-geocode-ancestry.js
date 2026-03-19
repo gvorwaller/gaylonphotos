@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 /**
- * AI-assisted geocoding for unresolved ancestry places.
- * Uses the Anthropic API (Claude) to estimate lat/lng for historical places
- * like "Prussia, German Empire" or "Königsberg, East Prussia".
+ * Geocode unresolved ancestry places using Google Geocoding API.
+ * Replaces failed/ai-estimate/family-estimate places with accurate Google coordinates.
  *
  * Usage:
- *   node scripts/ai-geocode-ancestry.js <collection-slug> [--dry-run]
+ *   node scripts/ai-geocode-ancestry.js <collection-slug> [--dry-run] [--status <status>]
  *
- * Reads ANTHROPIC_API_KEY from .env.
- * Batches ~20 places per API call. Updates ancestry.json in-place.
- * Sets geocodeStatus to "ai-estimate" and adds modernName field.
+ * Reads PUBLIC_GOOGLE_MAPS_API_KEY from .env.
+ * Default: geocodes places with status "failed" (no coordinates).
+ * Use --status to target a specific status (e.g. --status ai-estimate).
+ * If Google cannot resolve a place, marks it as "failed" with null coordinates.
  */
 
 import fs from 'fs';
@@ -30,18 +30,20 @@ if (fs.existsSync(envPath)) {
 	}
 }
 
-const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
-if (!ANTHROPIC_API_KEY) {
-	console.error('Missing ANTHROPIC_API_KEY in .env');
+const API_KEY = process.env.GOOGLE_GEOCODING_KEY;
+if (!API_KEY) {
+	console.error('Missing GOOGLE_GEOCODING_KEY in .env');
 	process.exit(1);
 }
 
 const slug = process.argv[2];
 if (!slug) {
-	console.error('Usage: node scripts/ai-geocode-ancestry.js <collection-slug> [--dry-run]');
+	console.error('Usage: node scripts/ai-geocode-ancestry.js <collection-slug> [--dry-run] [--status <status>]');
 	process.exit(1);
 }
 const dryRun = process.argv.includes('--dry-run');
+const statusIdx = process.argv.indexOf('--status');
+const targetStatus = statusIdx >= 0 ? process.argv[statusIdx + 1] : null;
 
 const ancestryPath = path.resolve(import.meta.dirname, '..', 'data', slug, 'ancestry.json');
 if (!fs.existsSync(ancestryPath)) {
@@ -52,100 +54,103 @@ if (!fs.existsSync(ancestryPath)) {
 const ancestry = JSON.parse(fs.readFileSync(ancestryPath, 'utf8'));
 const places = ancestry.places || [];
 
-// Find unresolved places
-const failed = places.filter(p => p.geocodeStatus === 'failed' || (p.lat == null && p.lng == null));
-console.log(`Found ${failed.length} unresolved places out of ${places.length} total.`);
+// Find places to geocode
+let toGeocode;
+if (targetStatus) {
+	toGeocode = places.filter(p => p.geocodeStatus === targetStatus);
+	console.log(`Found ${toGeocode.length} places with status "${targetStatus}" out of ${places.length} total.`);
+} else {
+	toGeocode = places.filter(p => p.geocodeStatus === 'failed' || (p.lat == null && p.lng == null));
+	console.log(`Found ${toGeocode.length} unresolved places out of ${places.length} total.`);
+}
 
-if (failed.length === 0) {
+if (toGeocode.length === 0) {
 	console.log('Nothing to do.');
 	process.exit(0);
 }
 
-const BATCH_SIZE = 20;
+/**
+ * Call Google Geocoding API for a single place name.
+ * Returns { lat, lng, formattedAddress, locationType } or null.
+ */
+async function geocodeWithGoogle(placeName) {
+	const url = `https://maps.googleapis.com/maps/api/geocode/json?${new URLSearchParams({
+		address: placeName,
+		key: API_KEY
+	})}`;
 
-async function callClaude(placeNames) {
-	const prompt = `For each historical place name below, provide the approximate modern-day coordinates (latitude, longitude) and the modern equivalent name if different. These are genealogical places from GEDCOM data, often historical regions that no longer exist (e.g. Prussia, East Prussia).
-
-Reply ONLY with a JSON array, no markdown fencing, no explanation. Each element:
-{"index": 0, "lat": 54.71, "lng": 20.45, "modernName": "Kaliningrad, Russia", "confidence": "high"}
-
-confidence should be "high" (well-known city/region), "medium" (small town, approximate), or "low" (very uncertain).
-
-If you truly cannot determine any location, use: {"index": 0, "lat": null, "lng": null, "modernName": null, "confidence": "none"}
-
-Places:
-${placeNames.map((n, i) => `${i}. ${n}`).join('\n')}`;
-
-	const resp = await fetch('https://api.anthropic.com/v1/messages', {
-		method: 'POST',
-		headers: {
-			'x-api-key': ANTHROPIC_API_KEY,
-			'anthropic-version': '2023-06-01',
-			'content-type': 'application/json'
-		},
-		body: JSON.stringify({
-			model: 'claude-sonnet-4-20250514',
-			max_tokens: 4096,
-			messages: [{ role: 'user', content: prompt }]
-		})
-	});
-
+	const resp = await fetch(url, { signal: AbortSignal.timeout(10000) });
 	if (!resp.ok) {
-		const err = await resp.text();
-		throw new Error(`Anthropic API error ${resp.status}: ${err}`);
+		throw new Error(`Google API HTTP ${resp.status}`);
 	}
 
 	const data = await resp.json();
-	const text = data.content[0].text.trim();
 
-	// Parse JSON — strip markdown fencing if present
-	const jsonStr = text.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-	return JSON.parse(jsonStr);
+	if (data.status === 'REQUEST_DENIED') {
+		throw new Error(`Google API denied: ${data.error_message || 'Geocoding API may not be enabled'}`);
+	}
+
+	if (data.status !== 'OK' || !data.results?.length) {
+		return null;
+	}
+
+	const result = data.results[0];
+	const { lat, lng } = result.geometry.location;
+	const locationType = result.geometry.location_type; // ROOFTOP, RANGE_INTERPOLATED, GEOMETRIC_CENTER, APPROXIMATE
+	return {
+		lat,
+		lng,
+		formattedAddress: result.formatted_address,
+		locationType
+	};
 }
 
-// Process in batches
 let resolved = 0;
-let skipped = 0;
+let unresolved = 0;
 
-for (let i = 0; i < failed.length; i += BATCH_SIZE) {
-	const batch = failed.slice(i, i + BATCH_SIZE);
-	const names = batch.map(p => p.name);
-	const batchNum = Math.floor(i / BATCH_SIZE) + 1;
-	const totalBatches = Math.ceil(failed.length / BATCH_SIZE);
+for (let i = 0; i < toGeocode.length; i++) {
+	const place = toGeocode[i];
 
-	console.log(`\nBatch ${batchNum}/${totalBatches} (${batch.length} places)...`);
+	// Rate limit: ~10 req/sec
+	if (i > 0) {
+		await new Promise(r => setTimeout(r, 100));
+	}
 
 	try {
-		const results = await callClaude(names);
+		const result = await geocodeWithGoogle(place.name);
 
-		for (const result of results) {
-			const place = batch[result.index];
-			if (!place) continue;
-
-			if (result.lat != null && result.lng != null && result.confidence !== 'none') {
-				place.lat = result.lat;
-				place.lng = result.lng;
-				place.geocodeStatus = 'ai-estimate';
-				place.modernName = result.modernName || null;
-				place.aiConfidence = result.confidence || 'medium';
-				resolved++;
-				console.log(`  ✓ ${place.name} → ${result.modernName || 'coords only'} (${result.lat}, ${result.lng}) [${result.confidence}]`);
-			} else {
-				skipped++;
-				console.log(`  ✗ ${place.name} — could not resolve`);
-			}
+		if (result) {
+			place.lat = result.lat;
+			place.lng = result.lng;
+			// ROOFTOP or RANGE_INTERPOLATED = precise; GEOMETRIC_CENTER or APPROXIMATE = approximate
+			place.geocodeStatus = (result.locationType === 'ROOFTOP' || result.locationType === 'RANGE_INTERPOLATED')
+				? 'ok' : 'approximate';
+			place.modernName = result.formattedAddress || null;
+			// Clean up old AI fields
+			delete place.aiConfidence;
+			resolved++;
+			console.log(`  [${i + 1}/${toGeocode.length}] ✓ ${place.name} → ${result.formattedAddress} (${result.lat}, ${result.lng}) [${result.locationType}]`);
+		} else {
+			place.lat = null;
+			place.lng = null;
+			place.geocodeStatus = 'failed';
+			delete place.aiConfidence;
+			delete place.modernName;
+			unresolved++;
+			console.log(`  [${i + 1}/${toGeocode.length}] ✗ ${place.name} — not found`);
 		}
 	} catch (err) {
-		console.error(`  Error in batch ${batchNum}: ${err.message}`);
-	}
-
-	// Brief pause between batches to be polite
-	if (i + BATCH_SIZE < failed.length) {
-		await new Promise(r => setTimeout(r, 1000));
+		console.error(`  [${i + 1}/${toGeocode.length}] ✗ ${place.name} — error: ${err.message}`);
+		// On API error (e.g. denied), stop early — likely a config issue
+		if (err.message.includes('denied')) {
+			console.error('\nStopping: Google Geocoding API access denied. Enable it at https://console.cloud.google.com/apis/library/geocoding-backend.googleapis.com');
+			process.exit(1);
+		}
+		unresolved++;
 	}
 }
 
-console.log(`\nDone: ${resolved} resolved, ${skipped} unresolvable, ${failed.length} total attempted.`);
+console.log(`\nDone: ${resolved} resolved, ${unresolved} unresolvable, ${toGeocode.length} total attempted.`);
 
 if (!dryRun && resolved > 0) {
 	fs.writeFileSync(ancestryPath, JSON.stringify(ancestry, null, '\t') + '\n');

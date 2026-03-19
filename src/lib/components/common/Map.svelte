@@ -228,23 +228,26 @@
 		};
 	});
 
-	// Sync polyline
+	// Sync polyline — read both deps upfront so the effect always tracks map AND polyline
 	$effect(() => {
-		if (!map) return;
+		const currentMap = map;
+		const currentPolyline = polyline;
+
+		if (!currentMap) return;
 
 		if (googlePolyline) {
 			googlePolyline.setMap(null);
 			googlePolyline = null;
 		}
 
-		if (polyline && polyline.length >= 2) {
+		if (currentPolyline && currentPolyline.length >= 2) {
 			googlePolyline = new google.maps.Polyline({
-				path: polyline,
+				path: currentPolyline,
 				geodesic: true,
 				strokeColor: '#28a745',
 				strokeOpacity: 0.8,
 				strokeWeight: 3,
-				map
+				map: currentMap
 			});
 		}
 
@@ -256,7 +259,8 @@
 		};
 	});
 
-	// Component cleanup — clear all map listeners on destroy
+	// Component cleanup — clear map listeners and InfoWindow on destroy
+	// Markers and polyline are cleaned up by their own effects above
 	$effect(() => {
 		const currentMap = map;
 		return () => {
@@ -265,15 +269,6 @@
 				infoWindowInstance = null;
 			}
 			if (currentMap) google.maps.event.clearInstanceListeners(currentMap);
-			for (const { marker, handler, contentEl } of googleMarkers) {
-				if (contentEl) contentEl.removeEventListener('click', handler);
-				marker.map = null;
-			}
-			googleMarkers = [];
-			if (googlePolyline) {
-				googlePolyline.setMap(null);
-				googlePolyline = null;
-			}
 		};
 	});
 </script>

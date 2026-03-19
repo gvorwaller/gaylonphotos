@@ -41,8 +41,7 @@
 			const q = ancestorSearch.toLowerCase();
 			persons = persons.filter((p) =>
 				p.name.toLowerCase().includes(q) ||
-				(p.birthPlace && p.birthPlace.toLowerCase().includes(q)) ||
-				(p.deathPlace && p.deathPlace.toLowerCase().includes(q))
+				(p.facts || []).some((f) => f.place && f.place.toLowerCase().includes(q))
 			);
 		}
 		return persons;
@@ -150,12 +149,21 @@
 	}
 
 	function placeSummary(person) {
-		const parts = [];
-		if (person.birthPlace) parts.push(person.birthPlace);
-		if (person.deathPlace && person.deathPlace !== person.birthPlace) {
-			parts.push(person.deathPlace);
+		if (!person.facts?.length) {
+			const parts = [];
+			if (person.birthPlace) parts.push(person.birthPlace);
+			if (person.deathPlace && person.deathPlace !== person.birthPlace) parts.push(person.deathPlace);
+			return parts.join(' \u2192 ') || '';
 		}
-		return parts.join(' \u2192 ') || '';
+		const seen = new Set();
+		const places = [];
+		for (const f of person.facts) {
+			if (f.place && !seen.has(f.place)) {
+				seen.add(f.place);
+				places.push(f.place);
+			}
+		}
+		return places.join(' \u2192 ') || '';
 	}
 
 	// Must stay in sync with --color-line-* CSS variables in global.css

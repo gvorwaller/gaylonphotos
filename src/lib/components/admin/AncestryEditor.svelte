@@ -567,6 +567,7 @@
 				<span class="stats-date">Imported {new Date(localAncestry.meta.importedAt).toLocaleDateString()}</span>
 				{#if failedCount > 0}
 					<span class="stat failed">{failedCount} failed geocode{failedCount !== 1 ? 's' : ''}</span>
+					<a href="/admin/{collectionSlug}/ancestry/geotag" class="btn btn-outline btn-sm">Geo-Tag Places</a>
 				{/if}
 			</div>
 

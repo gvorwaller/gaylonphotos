@@ -2,6 +2,7 @@ import { json } from '@sveltejs/kit';
 import {
 	getAncestry,
 	updateAncestry,
+	updatePlace,
 	clearAncestry,
 	importGedcom
 } from '$lib/server/ancestry.js';
@@ -146,6 +147,41 @@ export async function PUT({ request }) {
 			: err.message.includes('not "travel"') ? 400
 			: 500;
 		return json({ error: status === 500 ? 'Failed to save ancestry' : err.message }, { status });
+	}
+}
+
+/** PATCH /api/ancestry — Update a single place's coordinates (auth required) */
+export async function PATCH({ request }) {
+	let body;
+	try {
+		body = await request.json();
+	} catch {
+		return json({ error: 'Invalid JSON' }, { status: 400 });
+	}
+
+	const { collection, placeId, lat, lng } = body;
+	if (!collection || !placeId) {
+		return json({ error: 'collection and placeId required' }, { status: 400 });
+	}
+
+	if (!SLUG_RE.test(collection)) {
+		return json({ error: 'Invalid collection slug' }, { status: 400 });
+	}
+
+	// lat/lng can be null (to clear) or numbers
+	const numLat = lat == null ? null : Number(lat);
+	const numLng = lng == null ? null : Number(lng);
+	if ((numLat != null && isNaN(numLat)) || (numLng != null && isNaN(numLng))) {
+		return json({ error: 'lat and lng must be numbers or null' }, { status: 400 });
+	}
+
+	try {
+		const place = await updatePlace(collection, placeId, numLat, numLng);
+		return json({ place });
+	} catch (err) {
+		const msg = err.message || '';
+		const status = msg.includes('not found') ? 404 : 500;
+		return json({ error: status === 500 ? 'Failed to update place' : msg }, { status });
 	}
 }
 

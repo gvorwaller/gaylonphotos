@@ -85,6 +85,41 @@ export async function updateAncestry(collectionSlug, ancestryData) {
 	return ancestryData;
 }
 
+/**
+ * Update a single place's coordinates and geocodeStatus.
+ * Lighter than updateAncestry — reads, patches one place, recomputes nearStop, writes.
+ */
+export async function updatePlace(collectionSlug, placeId, lat, lng) {
+	await validateTravelCollection(collectionSlug);
+
+	const filePath = ancestryPath(collectionSlug);
+	const ancestry = await readJson(filePath);
+	if (!ancestry) throw new Error('No ancestry data for this collection');
+
+	const place = ancestry.places.find((p) => p.id === placeId);
+	if (!place) throw new Error(`Place not found: ${placeId}`);
+
+	place.lat = lat;
+	place.lng = lng;
+	place.geocodeStatus = lat != null && lng != null ? 'manual' : 'failed';
+
+	// Recompute nearStop for this place
+	const itinerary = await getItinerary(collectionSlug);
+	const stops = itinerary?.stops || [];
+	place.nearStop = false;
+	if (place.lat != null && place.lng != null) {
+		for (const stop of stops) {
+			if (stop.lat != null && stop.lng != null && haversineKm(place.lat, place.lng, stop.lat, stop.lng) < 50) {
+				place.nearStop = true;
+				break;
+			}
+		}
+	}
+
+	await writeJson(filePath, ancestry);
+	return place;
+}
+
 export async function clearAncestry(collectionSlug) {
 	await validateTravelCollection(collectionSlug);
 	await deleteJson(ancestryPath(collectionSlug));
@@ -382,40 +417,36 @@ function computeGenerations(rootId, individuals, families, maxGenerations) {
 }
 
 // ---------------------------------------------------------------------------
-// Geocoding via OpenStreetMap Nominatim
+// Geocoding via Google Geocoding API
 // ---------------------------------------------------------------------------
 
 /**
- * Geocode a list of unique place names using Nominatim.
- * Rate-limited to 1 request per 1.1 seconds.
+ * Geocode a list of unique place names using Google Geocoding API.
+ * Rate-limited to ~10 requests per second.
  *
  * @param {string[]} placeNames
  * @returns {Promise<Map<string, { lat: number, lng: number, country: string, status: string }>>}
  */
 export async function geocodePlaces(placeNames) {
+	const { GOOGLE_GEOCODING_KEY } = await import('$env/dynamic/private');
 	const results = new Map();
 	placeNames = [...new Set(placeNames)];
 
 	for (let i = 0; i < placeNames.length; i++) {
 		const name = placeNames[i];
 
-		// Rate limit: 1 req / 1.1s
+		// Rate limit: ~10 req/sec
 		if (i > 0) {
-			await new Promise((r) => setTimeout(r, 1100));
+			await new Promise((r) => setTimeout(r, 100));
 		}
 
 		try {
-			const url = `https://nominatim.openstreetmap.org/search?${new URLSearchParams({
-				q: name,
-				format: 'json',
-				limit: '1',
-				addressdetails: '1'
+			const url = `https://maps.googleapis.com/maps/api/geocode/json?${new URLSearchParams({
+				address: name,
+				key: GOOGLE_GEOCODING_KEY
 			})}`;
 
-			const res = await fetch(url, {
-				headers: { 'User-Agent': 'GaylonPhotos/1.0 (personal photography site)' },
-				signal: AbortSignal.timeout(10000)
-			});
+			const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
 
 			if (!res.ok) {
 				results.set(name, { lat: null, lng: null, country: '', status: 'failed' });
@@ -423,23 +454,18 @@ export async function geocodePlaces(placeNames) {
 			}
 
 			const data = await res.json();
-			if (data.length === 0) {
+			if (data.status !== 'OK' || !data.results?.length) {
 				results.set(name, { lat: null, lng: null, country: '', status: 'failed' });
 				continue;
 			}
 
-			const top = data[0];
-			const lat = parseFloat(top.lat);
-			const lng = parseFloat(top.lon);
-			if (isNaN(lat) || isNaN(lng)) {
-				results.set(name, { lat: null, lng: null, country: '', status: 'failed' });
-				continue;
-			}
-			const country = top.address?.country || '';
-			// Nominatim place_rank: 4=country, 8=state, 14=city, 16=town, 22=suburb, 26=street, 30=building
-			// Ranks < 10 (too vague: country/state) or > 22 (too specific: often wrong building) → approximate
-			const rank = top.place_rank ?? 0;
-			const status = (rank < 10 || rank > 22) ? 'approximate' : 'ok';
+			const top = data.results[0];
+			const lat = top.geometry.location.lat;
+			const lng = top.geometry.location.lng;
+			const country = top.address_components?.find(c => c.types.includes('country'))?.long_name || '';
+			// ROOFTOP/RANGE_INTERPOLATED = precise, GEOMETRIC_CENTER/APPROXIMATE = approximate
+			const locationType = top.geometry.location_type;
+			const status = (locationType === 'ROOFTOP' || locationType === 'RANGE_INTERPOLATED') ? 'ok' : 'approximate';
 
 			results.set(name, { lat, lng, country, status });
 		} catch {

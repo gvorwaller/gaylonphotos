@@ -44,6 +44,10 @@ export function apiPut(path, body) {
 	return request('PUT', path, body);
 }
 
+export function apiPatch(path, body) {
+	return request('PATCH', path, body);
+}
+
 export function apiDelete(path, body) {
 	return request('DELETE', path, body);
 }
