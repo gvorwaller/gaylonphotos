@@ -10,12 +10,13 @@
 	 */
 	import { slide } from 'svelte/transition';
 
-	let { ancestry = { persons: [], places: [] }, collectionSlug = '', mapBounds = null } = $props();
+	let { ancestry = { persons: [], places: [] }, collectionSlug = '', mapBounds = null, ongotolocation = null } = $props();
 
 	let expanded = $state(false);
 	let activeTab = $state('place');
 	let expandedPersonId = $state(null);
 	let ancestorSearch = $state('');
+	let searchGlobal = $state(false);
 
 	// ─── Map-viewport filtering ─────────────────────────────
 	let visiblePlaces = $derived.by(() => {
@@ -36,7 +37,13 @@
 		new Set(visiblePlaces.flatMap((p) => (p.events || []).map((e) => e.personId)))
 	);
 	let visiblePersons = $derived.by(() => {
-		let persons = (ancestry?.persons || []).filter((p) => visiblePersonIds.has(p.id));
+		let persons;
+		if (searchGlobal && ancestorSearch) {
+			// Global search: search ALL persons, not just viewport
+			persons = ancestry?.persons || [];
+		} else {
+			persons = (ancestry?.persons || []).filter((p) => visiblePersonIds.has(p.id));
+		}
 		if (ancestorSearch) {
 			const q = ancestorSearch.toLowerCase();
 			persons = persons.filter((p) =>
@@ -52,7 +59,7 @@
 	// By Place: sorted by country then name, filtered by search if active
 	let visiblePersonIdSet = $derived(new Set(visiblePersons.map((p) => p.id)));
 	let placesSorted = $derived.by(() => {
-		let places = visiblePlaces;
+		let places = (searchGlobal && ancestorSearch) ? (ancestry?.places || []).filter((p) => p.lat != null) : visiblePlaces;
 		if (ancestorSearch) {
 			// Only show places that have events for matching persons
 			places = places.filter((p) =>
@@ -218,6 +225,34 @@
 		}
 		return path;
 	}
+
+	// Find the best known location for a person (birth > death > first event with coords)
+	function findPersonLocation(person) {
+		const places = ancestry?.places || [];
+		let birthPlace = null;
+		let deathPlace = null;
+		let firstPlace = null;
+
+		for (const place of places) {
+			if (place.lat == null || place.lng == null) continue;
+			for (const evt of (place.events || [])) {
+				if (evt.personId !== person.id) continue;
+				if (evt.type === 'Birth' && !birthPlace) birthPlace = place;
+				else if (evt.type === 'Death' && !deathPlace) deathPlace = place;
+				else if (!firstPlace) firstPlace = place;
+			}
+		}
+
+		const best = birthPlace || deathPlace || firstPlace;
+		return best ? { lat: best.lat, lng: best.lng } : null;
+	}
+
+	function gotoPersonLocation(person) {
+		const loc = findPersonLocation(person);
+		if (loc && ongotolocation) {
+			ongotolocation({ lat: loc.lat, lng: loc.lng, zoom: 11, _ts: Date.now() });
+		}
+	}
 </script>
 
 <div class="ancestry-panel">
@@ -262,7 +297,7 @@
 				<input
 					type="text"
 					class="ancestry-search-input"
-					placeholder="Search ancestors by name or place..."
+					placeholder={searchGlobal ? 'Search all ancestors by name or place...' : 'Search ancestors in view...'}
 					bind:value={ancestorSearch}
 				/>
 				{#if ancestorSearch}
@@ -270,6 +305,18 @@
 						&times;
 					</button>
 				{/if}
+				<div class="search-scope-toggle">
+					<button
+						class="scope-btn"
+						class:active={!searchGlobal}
+						onclick={() => searchGlobal = false}
+					>In View</button>
+					<button
+						class="scope-btn"
+						class:active={searchGlobal}
+						onclick={() => searchGlobal = true}
+					>All</button>
+				</div>
 			</div>
 
 			<!-- Tab content -->
@@ -406,6 +453,9 @@
 														<button class="person-link" onclick={() => togglePerson(person.id)}>
 															{person.name}
 														</button>
+														{#if findPersonLocation(person)}
+															<button class="goto-btn" onclick={() => gotoPersonLocation(person)} title="Zoom map to this person's location">&#8853;</button>
+														{/if}
 														{#if person.fsId}
 															<a href={fsLink(person)} target="_blank" rel="noopener noreferrer" class="fs-link" title="View on FamilySearch">FS</a>
 														{/if}
@@ -469,6 +519,9 @@
 				<button class="person-link" onclick={() => togglePerson(person.id)}>
 					{person.name}
 				</button>
+				{#if findPersonLocation(person)}
+					<button class="goto-btn" onclick={() => gotoPersonLocation(person)} title="Zoom map to this person's location">&#8853;</button>
+				{/if}
 				{#if person.fsId}
 					<a href={fsLink(person)} target="_blank" rel="noopener noreferrer" class="fs-link" title="View on FamilySearch">FS</a>
 				{/if}
@@ -633,6 +686,36 @@
 	.ancestry-search-clear:hover {
 		color: var(--color-text);
 	}
+	.search-scope-toggle {
+		display: flex;
+		gap: 0;
+		flex-shrink: 0;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		overflow: hidden;
+	}
+	.scope-btn {
+		padding: 5px 10px;
+		font-size: 0.7rem;
+		font-weight: 600;
+		font-family: inherit;
+		background: none;
+		border: none;
+		border-right: 1px solid var(--color-border);
+		cursor: pointer;
+		color: var(--color-text-muted);
+		transition: background 0.1s, color 0.1s;
+	}
+	.scope-btn:last-child {
+		border-right: none;
+	}
+	.scope-btn.active {
+		background: var(--color-primary);
+		color: #fff;
+	}
+	.scope-btn:hover:not(.active) {
+		background: var(--color-bg);
+	}
 
 	/* ─── Content Area ───────────────────────────── */
 	.ancestry-content {
@@ -732,6 +815,22 @@
 	.person-link:hover {
 		text-decoration-color: var(--color-primary);
 		color: var(--color-primary);
+	}
+	.goto-btn {
+		background: none;
+		border: 1px solid var(--color-border);
+		border-radius: 3px;
+		padding: 0 4px;
+		font-size: 0.75rem;
+		cursor: pointer;
+		color: var(--color-text-muted);
+		vertical-align: middle;
+		line-height: 1.2;
+		transition: color 0.1s, border-color 0.1s;
+	}
+	.goto-btn:hover {
+		color: var(--color-primary);
+		border-color: var(--color-primary);
 	}
 	.fs-link {
 		font-size: 0.65rem;
