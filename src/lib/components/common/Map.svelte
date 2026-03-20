@@ -29,7 +29,8 @@
 		onmapready = null,
 		onboundschange = null,
 		infoWindowEnabled = false,
-		searchable = false
+		searchable = false,
+		gotoTarget = null
 	} = $props();
 
 	let mapContainer;
@@ -257,6 +258,15 @@
 				googlePolyline = null;
 			}
 		};
+	});
+
+	// Pan/zoom to a target location when gotoTarget prop changes
+	$effect(() => {
+		if (!map || !gotoTarget) return;
+		const { lat, lng } = gotoTarget;
+		const targetZoom = gotoTarget.zoom ?? 11;
+		map.panTo({ lat, lng });
+		map.setZoom(targetZoom);
 	});
 
 	// Component cleanup — clear map listeners and InfoWindow on destroy

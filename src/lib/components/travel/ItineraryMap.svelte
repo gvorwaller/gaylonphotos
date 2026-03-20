@@ -13,7 +13,8 @@
 		ancestryPlaces = [],
 		showAncestry = false,
 		collectionSlug = '',
-		ancestry = null
+		ancestry = null,
+		gotoTarget = null
 	} = $props();
 
 	// Use globalThis.Map — `Map` is shadowed by the Map.svelte component import
@@ -201,6 +202,7 @@
 		infoWindowEnabled={true}
 		onmarkerclick={handleMarkerClick}
 		searchable={true}
+		{gotoTarget}
 	/>
 </div>
 

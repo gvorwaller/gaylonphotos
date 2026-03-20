@@ -1,7 +1,7 @@
 <script>
 	import PhotoUploader from '$lib/components/admin/PhotoUploader.svelte';
 	import PhotoEditor from '$lib/components/admin/PhotoEditor.svelte';
-	import { apiPost } from '$lib/api.js';
+	import { apiPost, apiDelete } from '$lib/api.js';
 	import Modal from '$lib/components/common/Modal.svelte';
 
 	let { data } = $props();
@@ -35,10 +35,71 @@
 
 	function handleDeleted(photoId) {
 		photos = photos.filter((p) => p.id !== photoId);
+		selectedPhotos.delete(photoId);
+		selectedPhotos = new Set(selectedPhotos);
 	}
 
 	let untaggedCount = $derived(photos.filter((p) => p.gpsSource === null).length);
 
+	// --- Multi-select & batch delete ---
+	let selectMode = $state(false);
+	let selectedPhotos = $state(new Set());
+	let showBatchDeleteConfirm = $state(false);
+	let batchDeleteProgress = $state(null);
+
+	let selectedCount = $derived(selectedPhotos.size);
+	let allSelected = $derived(photos.length > 0 && selectedPhotos.size === photos.length);
+
+	function toggleSelectMode() {
+		selectMode = !selectMode;
+		if (!selectMode) selectedPhotos = new Set();
+	}
+
+	function togglePhoto(photoId) {
+		const next = new Set(selectedPhotos);
+		if (next.has(photoId)) next.delete(photoId);
+		else next.add(photoId);
+		selectedPhotos = next;
+	}
+
+	function selectAll() {
+		selectedPhotos = new Set(photos.map((p) => p.id));
+	}
+
+	function deselectAll() {
+		selectedPhotos = new Set();
+	}
+
+	async function batchDelete() {
+		showBatchDeleteConfirm = false;
+		const ids = [...selectedPhotos];
+		batchDeleteProgress = { current: 0, total: ids.length, errors: 0 };
+
+		for (let i = 0; i < ids.length; i++) {
+			const result = await apiDelete('/api/photos', {
+				collection: data.collection.slug,
+				photoId: ids[i]
+			});
+
+			if (result.ok) {
+				handleDeleted(ids[i]);
+			} else {
+				batchDeleteProgress.errors++;
+			}
+			batchDeleteProgress.current = i + 1;
+		}
+
+		const hadErrors = batchDeleteProgress.errors > 0;
+		setTimeout(() => {
+			batchDeleteProgress = null;
+			if (!hadErrors) {
+				selectMode = false;
+				selectedPhotos = new Set();
+			}
+		}, hadErrors ? 5000 : 2000);
+	}
+
+	// --- Auto-ID ---
 	let unidentifiedPhotos = $derived(
 		data.collection.type === 'wildlife' ? photos.filter((p) => !p.species) : []
 	);
@@ -114,7 +175,38 @@
 	</section>
 
 	<section style="margin-top: 32px;">
-		<h2 class="subsection-title">Photos ({photos.length})</h2>
+		<div class="photos-header">
+			<h2 class="subsection-title">Photos ({photos.length})</h2>
+			{#if photos.length > 0}
+				<button class="btn btn-outline btn-sm" onclick={toggleSelectMode}>
+					{selectMode ? 'Cancel Select' : 'Select'}
+				</button>
+			{/if}
+		</div>
+
+		{#if selectMode}
+			<div class="batch-bar">
+				<div class="batch-bar-left">
+					<button class="btn btn-outline btn-xs" onclick={allSelected ? deselectAll : selectAll}>
+						{allSelected ? 'Deselect All' : 'Select All'}
+					</button>
+					<span class="batch-count">{selectedCount} selected</span>
+				</div>
+				{#if batchDeleteProgress}
+					<span class="batch-progress">
+						Deleting... {batchDeleteProgress.current}/{batchDeleteProgress.total}
+						{#if batchDeleteProgress.errors > 0}
+							({batchDeleteProgress.errors} failed)
+						{/if}
+					</span>
+				{:else if selectedCount > 0}
+					<button class="btn btn-danger btn-sm" onclick={() => showBatchDeleteConfirm = true}>
+						Delete Selected ({selectedCount})
+					</button>
+				{/if}
+			</div>
+		{/if}
+
 		{#if photos.length === 0}
 			<p style="color: var(--color-text-muted); padding: 24px 0;">
 				No photos yet. Upload some above.
@@ -122,19 +214,51 @@
 		{:else}
 			<div class="photo-list">
 				{#each photos as photo (photo.id)}
-					<PhotoEditor
-						{photo}
-						collectionSlug={data.collection.slug}
-						collectionType={data.collection.type}
-						apiKey={data.googleMapsApiKey}
-						onupdated={handleUpdated}
-						ondeleted={() => handleDeleted(photo.id)}
-					/>
+					{#if selectMode}
+						<div class="selectable-photo" class:selected={selectedPhotos.has(photo.id)}>
+							<button
+								class="select-checkbox"
+								onclick={() => togglePhoto(photo.id)}
+								aria-label="Select {photo.filename}"
+							>
+								<span class="check-box" class:checked={selectedPhotos.has(photo.id)}>
+									{#if selectedPhotos.has(photo.id)}&#10003;{/if}
+								</span>
+							</button>
+							<div class="selectable-photo-content">
+								<PhotoEditor
+									{photo}
+									collectionSlug={data.collection.slug}
+									collectionType={data.collection.type}
+									apiKey={data.googleMapsApiKey}
+									onupdated={handleUpdated}
+									ondeleted={() => handleDeleted(photo.id)}
+								/>
+							</div>
+						</div>
+					{:else}
+						<PhotoEditor
+							{photo}
+							collectionSlug={data.collection.slug}
+							collectionType={data.collection.type}
+							apiKey={data.googleMapsApiKey}
+							onupdated={handleUpdated}
+							ondeleted={() => handleDeleted(photo.id)}
+						/>
+					{/if}
 				{/each}
 			</div>
 		{/if}
 	</section>
 </div>
+
+<Modal title="Delete Selected Photos" show={showBatchDeleteConfirm} onclose={() => showBatchDeleteConfirm = false}>
+	<p>Are you sure you want to delete <strong>{selectedCount}</strong> photo{selectedCount !== 1 ? 's' : ''}? This cannot be undone.</p>
+	{#snippet actions()}
+		<button class="btn btn-outline btn-sm" onclick={() => showBatchDeleteConfirm = false}>Cancel</button>
+		<button class="btn btn-danger btn-sm" onclick={batchDelete}>Delete {selectedCount} Photos</button>
+	{/snippet}
+</Modal>
 
 <Modal title="Auto-ID Bird Species" show={showAutoIdConfirm} onclose={() => showAutoIdConfirm = false}>
 	<p>Use AI vision to identify species for <strong>{unidentifiedPhotos.length}</strong>
@@ -183,9 +307,101 @@
 		color: var(--color-text-muted);
 		font-style: italic;
 	}
+	.photos-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+	}
+	.photos-header .subsection-title {
+		margin: 0;
+	}
+	.batch-bar {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 10px 14px;
+		margin-top: 10px;
+		background: #f8f9fa;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+	}
+	.batch-bar-left {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+	}
+	.btn-xs {
+		padding: 3px 8px;
+		font-size: 0.7rem;
+	}
+	.batch-count {
+		font-size: 0.8rem;
+		color: var(--color-text-muted);
+		font-weight: 600;
+	}
+	.batch-progress {
+		font-size: 0.8rem;
+		color: var(--color-text-muted);
+		padding: 6px 14px;
+		background: #fff;
+		border-radius: var(--radius-sm);
+	}
 	.photo-list {
 		display: flex;
 		flex-direction: column;
 		gap: 12px;
+	}
+	.selectable-photo {
+		display: flex;
+		align-items: stretch;
+		gap: 0;
+		border: 2px solid transparent;
+		border-radius: var(--radius-md);
+		transition: border-color 0.1s;
+	}
+	.selectable-photo.selected {
+		border-color: var(--color-primary);
+		background: #f0faf0;
+	}
+	.select-checkbox {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 36px;
+		flex-shrink: 0;
+		background: #f8f9fa;
+		border: none;
+		border-right: 1px solid var(--color-border);
+		border-radius: var(--radius-md) 0 0 var(--radius-md);
+		cursor: pointer;
+	}
+	.select-checkbox:hover {
+		background: #e9ecef;
+	}
+	.selectable-photo.selected .select-checkbox {
+		background: var(--color-primary);
+	}
+	.check-box {
+		width: 18px;
+		height: 18px;
+		border: 2px solid #adb5bd;
+		border-radius: 3px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-size: 0.75rem;
+		font-weight: 700;
+		color: transparent;
+		background: #fff;
+		transition: all 0.1s;
+	}
+	.check-box.checked {
+		background: var(--color-primary);
+		border-color: var(--color-primary);
+		color: #fff;
+	}
+	.selectable-photo-content {
+		flex: 1;
+		min-width: 0;
 	}
 </style>

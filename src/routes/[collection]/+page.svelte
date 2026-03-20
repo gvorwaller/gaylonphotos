@@ -13,6 +13,7 @@
 	let mapBounds = $state(null);
 	let mapFilterActive = $state(false);
 	let showAncestryOnMap = $state(false);
+	let gotoTarget = $state(null);
 	let prevSlug; // Plain let, not $state — must not trigger effect re-runs
 
 	// Reset filters when navigating between collections (not on data invalidation)
@@ -115,6 +116,7 @@
 					showAncestry={showAncestryOnMap}
 					collectionSlug={data.collection.slug}
 					ancestry={hasAncestry ? data.ancestry : null}
+					{gotoTarget}
 				/>
 			</section>
 
@@ -130,6 +132,7 @@
 					ancestry={data.ancestry}
 					collectionSlug={data.collection.slug}
 					{mapBounds}
+					ongotolocation={(target) => { gotoTarget = target; showAncestryOnMap = true; }}
 				/>
 			</section>
 		{/if}
