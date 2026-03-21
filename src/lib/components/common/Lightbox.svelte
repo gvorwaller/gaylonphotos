@@ -1,9 +1,9 @@
 <script>
 	/**
 	 * Full-screen photo viewer with prev/next navigation.
-	 * Props: photo (current), photos (all, for navigation), onclose
+	 * Props: photo (current), photos (all, for navigation), onclose, collectionSlug
 	 */
-	let { photo, photos = [], onclose = null } = $props();
+	let { photo, photos = [], onclose = null, collectionSlug = '' } = $props();
 
 	let currentIndex = $derived(photos.findIndex((p) => p.id === photo.id));
 	let currentPhoto = $derived(currentIndex >= 0 ? photos[currentIndex] : photo);
@@ -18,6 +18,7 @@
 		photo; // track photo as dependency
 		navIndex = null;
 	});
+	let displayIndex = $derived(navIndex ?? currentIndex);
 	let displayPhoto = $derived(
 		navIndex !== null && navIndex >= 0 && navIndex < photos.length
 			? photos[navIndex]
@@ -44,6 +45,41 @@
 		if (e.target === e.currentTarget) onclose?.();
 	}
 
+	// Touch swipe support
+	let touchStartX = 0;
+	let touchStartY = 0;
+
+	function handleTouchStart(e) {
+		touchStartX = e.touches[0].clientX;
+		touchStartY = e.touches[0].clientY;
+	}
+
+	function handleTouchEnd(e) {
+		const dx = e.changedTouches[0].clientX - touchStartX;
+		const dy = e.changedTouches[0].clientY - touchStartY;
+		if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+			if (dx > 0) goPrev();
+			else goNext();
+		}
+	}
+
+	// Trackpad horizontal swipe support (debounced)
+	let wheelAccum = 0;
+	let wheelTimer = null;
+
+	function handleWheel(e) {
+		// Only handle horizontal-dominant gestures
+		if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
+		e.preventDefault();
+		wheelAccum += e.deltaX;
+		clearTimeout(wheelTimer);
+		wheelTimer = setTimeout(() => {
+			if (wheelAccum > 80) goNext();
+			else if (wheelAccum < -80) goPrev();
+			wheelAccum = 0;
+		}, 100);
+	}
+
 	function formatDate(iso) {
 		if (!iso) return null;
 		try {
@@ -54,19 +90,39 @@
 			return iso;
 		}
 	}
+
+	let mapLink = $derived(
+		displayPhoto.gps && collectionSlug
+			? `/${encodeURIComponent(collectionSlug)}?mapLat=${displayPhoto.gps.lat}&mapLng=${displayPhoto.gps.lng}`
+			: null
+	);
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
-<div class="lightbox-overlay" onclick={handleOverlayClick} role="dialog" aria-modal="true" aria-label="Photo lightbox" tabindex="-1">
+<div
+	class="lightbox-overlay"
+	onclick={handleOverlayClick}
+	ontouchstart={handleTouchStart}
+	ontouchend={handleTouchEnd}
+	onwheel={handleWheel}
+	role="dialog"
+	aria-modal="true"
+	aria-label="Photo lightbox"
+	tabindex="-1"
+>
 	<button class="lightbox-close" onclick={onclose} aria-label="Close">&times;</button>
 
-	{#if (navIndex ?? currentIndex) > 0}
+	{#if photos.length > 1}
+		<div class="lightbox-counter">{displayIndex + 1} of {photos.length}</div>
+	{/if}
+
+	{#if displayIndex > 0}
 		<button class="lightbox-nav lightbox-prev" onclick={goPrev} aria-label="Previous photo">&#8249;</button>
 	{/if}
 
-	{#if (navIndex ?? currentIndex) < photos.length - 1}
+	{#if displayIndex < photos.length - 1}
 		<button class="lightbox-nav lightbox-next" onclick={goNext} aria-label="Next photo">&#8250;</button>
 	{/if}
 
@@ -102,6 +158,9 @@
 				{#if displayPhoto.iso}
 					<span>ISO {displayPhoto.iso}</span>
 				{/if}
+				{#if mapLink}
+					<a href={mapLink} class="lightbox-map-link" onclick={onclose}>Show on Map &rarr;</a>
+				{/if}
 			</div>
 		</div>
 	</div>
@@ -130,6 +189,19 @@
 		opacity: 0.7;
 	}
 	.lightbox-close:hover { opacity: 1; }
+	.lightbox-counter {
+		position: absolute;
+		top: 20px;
+		left: 50%;
+		transform: translateX(-50%);
+		background: rgba(0, 0, 0, 0.5);
+		color: #fff;
+		font-size: 0.8rem;
+		font-weight: 600;
+		padding: 4px 14px;
+		border-radius: 20px;
+		z-index: 1001;
+	}
 	.lightbox-nav {
 		position: absolute;
 		top: 50%;
@@ -183,5 +255,14 @@
 		font-weight: 600;
 		font-style: italic;
 		opacity: 1;
+	}
+	.lightbox-map-link {
+		color: #28a745;
+		text-decoration: none;
+		font-weight: 600;
+		opacity: 1;
+	}
+	.lightbox-map-link:hover {
+		text-decoration: underline;
 	}
 </style>

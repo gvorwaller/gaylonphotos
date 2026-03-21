@@ -9,5 +9,6 @@
 		photo={data.photo}
 		collection={data.collection}
 		apiKey={data.googleMapsApiKey}
+		photoNav={data.photoNav}
 	/>
 </div>

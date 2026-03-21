@@ -3,7 +3,7 @@
 ## Context
 Open td tasks spanning bug fixes, UX improvements, and new features. Organized into phases by dependency and complexity — quick fixes first, then progressively larger changes. Each phase can be committed and deployed independently.
 
-**Last updated:** 2026-03-19
+**Last updated:** 2026-03-20
 
 ---
 
@@ -67,25 +67,20 @@ Open td tasks spanning bug fixes, UX improvements, and new features. Organized i
 
 ---
 
-## Phase 4: Batch Operations & Map UX (P2)
-*Admin batch operations and map interaction improvements.*
+## ~~Phase 4: Batch Operations & Map UX~~ (partially deployed 2026-03-20)
 
-### 4a. Batch delete in admin UI (td-286da1)
-**File:** `src/routes/admin/[collection]/+page.svelte`
-**Approach:**
-- Add a `selectedPhotos` Set state for multi-select
-- Add checkbox overlay on each PhotoEditor thumbnail
-- "Select All" / "Deselect All" toggle in header
-- "Delete Selected (N)" button → confirmation modal → sequential DELETE calls with progress
-- Reuse existing `handleDeleted()` callback and `/api/photos` DELETE endpoint
+### ~~4a. Batch delete in admin UI (td-286da1)~~ DONE
+- Select mode with checkboxes, Select All / Deselect All, confirmation modal, sequential DELETE with progress
+- **File:** `src/routes/admin/[collection]/+page.svelte`
 
 ### 4b. Photo preview on map marker click (td-e259fc)
 **Description:** Show photo thumbnail when clicking a map marker in birds/surfing collections.
 
-### 4c. Global ancestor name search with map zoom (td-2d7177)
-**Description:** Add a name search that works globally (not filtered by current map viewport). When a person is selected, the map zooms to their birth location — or other significant location if birth is unavailable. Could live in the Google Map search bar (alongside place search) or in the Family Heritage section.
-**Optional enhancement:** Allow choosing which event location to zoom to (birth, death, marriage, etc.) via a dropdown or secondary click.
-**Note:** Current ancestry search in AncestryPanel only filters the visible list by viewport. This feature would actively navigate the map to the person's location.
+### ~~4c. Global ancestor name search with map zoom (td-2d7177)~~ DONE
+- "In View" / "All" toggle on ancestry search bar; zoom-to-person ⊕ buttons on each ancestor name
+- Map pans to birth location (priority: birth > death > first event with coordinates)
+- Auto-enables "Show Family Heritage" map overlay on zoom
+- **Files:** `AncestryPanel.svelte`, `Map.svelte`, `ItineraryMap.svelte`, `[collection]/+page.svelte`
 
 ### 4d. Family tree display (td-617191)
 **Description:** Add a family tree visualization to the family history section.
@@ -94,20 +89,42 @@ Open td tasks spanning bug fixes, UX improvements, and new features. Organized i
 
 ---
 
-## Phase 5: Lower Priority (P3)
-*Deferred features and polish.*
+## Phase 5: Photo Detail UX (P3)
+*Improvements to the photo detail/lightbox browsing experience.*
 
-### 5a. Ancestry: tag names gaylon/madonna in By Generation tab (td-20ed38)
+### 5a. Photo counter in detail view (td-36e3e0)
+**Description:** Show "1 of 39" (or similar) counter when browsing photos in detail view.
+
+### 5b. Swipe through photos in detail view (td-d6b1c7)
+**Description:** Allow swiping (touch) or arrow key navigation through photos in detail view.
+
+### 5c. Photo detail: jump to location on map (td-cd6075)
+**Description:** Show a map pin icon on the detail photo view (only for photos with GPS). Clicking it navigates back to the collection page and zooms the map to the photo's GPS location.
+
+---
+
+## Phase 6: Ancestry Polish (P3)
+*Visual refinements to the ancestry/family heritage display.*
+
+### 6a. Ancestry: tag names gaylon/madonna in By Generation tab (td-20ed38)
 **Description:** Color-code ancestor names in the By Generation tab to indicate whose side of the family they belong to (gaylon vs madonna), same as the color-coded tagging that appears when clicking a location diamond on the map.
 
-### 5b. Admin ancestry real names (td-3573e3)
+### 6b. Admin ancestry real names (td-3573e3)
 **Description:** Show "Gaylon's" / "Madonna's" instead of "Wife-Paternal" etc. in the admin ancestry editor.
 
-### 5c. AI location recognition (td-3b705b)
+---
+
+## Phase 7: Advanced Features (P3)
+*Larger features requiring more design/infrastructure work.*
+
+### 7a. AI location recognition (td-3b705b)
 **Description:** Gemini vision for photos without GPS data.
 
-### 5d. Video support (td-0a826d)
+### 7b. Video support (td-0a826d)
 **Description:** Video uploads + playback.
+
+### 7c. User help in hamburger menu (td-41b18a)
+**Description:** Add a help/info section accessible from the hamburger navigation menu.
 
 ---
 
@@ -135,16 +152,20 @@ Open td tasks spanning bug fixes, UX improvements, and new features. Organized i
 | td-8aa049 All event places per person | **REVIEW** | All person.facts[] places shown in panel + search (2026-03-19) |
 | td-2c4fef Show all ancestry locations | **REVIEW** | Same fix as td-8aa049 (2026-03-19) |
 | td-fa3441 Itinerary polyline | **REVIEW** | Fixed $effect dep tracking — read both map+polyline upfront (2026-03-19) |
+| ~~td-286da1 Batch delete UI~~ | **DONE** | Select mode, checkboxes, confirm modal, sequential delete (2026-03-20) |
+| ~~td-2d7177 Global ancestor name search~~ | **DONE** | In View/All toggle, zoom-to-person buttons, map pans (2026-03-20) |
 | td-e259fc Map marker photo preview | Open | Photo thumbnail on marker click for birds/surfing (P2) |
-| td-286da1 Batch delete UI | Open | Multi-select + bulk delete (P2) |
-| td-2d7177 Global ancestor name search | Open | Search by name, zoom map to person's location (P2) |
 | td-617191 Family tree display | Open | Family tree visualization (P2) |
 | td-63cf89 Delete duplicates | Open | Deferred |
 | td-77ddd9 Perceptual hash dedup | Open | Deferred |
+| td-36e3e0 Photo counter in detail | Open | Show "1 of 39" in photo detail view (P3) |
+| td-d6b1c7 Swipe through photos | Open | Touch swipe / arrow key navigation in detail view (P3) |
+| td-cd6075 Photo detail jump to map | Open | Map pin icon to zoom collection map to photo location (P3) |
 | td-20ed38 Ancestry gaylon/madonna tags | Open | Color-code names in By Generation tab (P3) |
 | td-3573e3 Admin ancestry real names | Open | Show Gaylon's/Madonna's in admin (P3) |
 | td-3b705b AI location recognition | Open | Gemini vision for photos without GPS (P3) |
 | td-0a826d Video support | Open | Video uploads + playback (P3) |
+| td-41b18a User help in menu | Open | Help section in hamburger nav (P3) |
 
 ---
 
@@ -174,3 +195,14 @@ Phase 3 verification:
 
 Phase 4 verification:
 - Admin → select multiple photos → "Delete Selected" → confirmation → photos deleted
+- Scandinavia → Family Heritage → search toggle "All" → type name → ⊕ button zooms map to person
+- Map auto-shows ancestry diamonds when zooming to a person
+
+Phase 5 verification:
+- Photo detail → shows "1 of N" counter
+- Photo detail → swipe or arrow keys navigate between photos
+- Photo detail (with GPS) → map pin icon → navigates to collection map zoomed to location
+
+Phase 6 verification:
+- By Generation tab → ancestor names color-coded by gaylon/madonna lineage
+- Admin ancestry editor → shows "Gaylon's" / "Madonna's" instead of "Wife-Paternal"
