@@ -5,7 +5,7 @@
 	 */
 	import Lightbox from './Lightbox.svelte';
 
-	let { photos = [], columns = 4 } = $props();
+	let { photos = [], columns = 4, collectionSlug = '' } = $props();
 
 	let lightboxPhoto = $state(null);
 
@@ -38,7 +38,7 @@
 {/if}
 
 {#if lightboxPhoto}
-	<Lightbox photo={lightboxPhoto} {photos} onclose={closeLightbox} />
+	<Lightbox photo={lightboxPhoto} {photos} onclose={closeLightbox} {collectionSlug} />
 {/if}
 
 <style>

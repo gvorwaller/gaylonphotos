@@ -6,7 +6,7 @@
 	import GoogleMap from '$lib/components/common/Map.svelte';
 	import Lightbox from '$lib/components/common/Lightbox.svelte';
 
-	let { photos = [], apiKey = '', onboundschange = null } = $props();
+	let { photos = [], apiKey = '', onboundschange = null, collectionSlug = '', gotoTarget = null } = $props();
 
 	let lightboxPhoto = $state(null);
 
@@ -48,6 +48,33 @@
 			}));
 	});
 
+	function esc(str) {
+		if (str == null) return '';
+		return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+	}
+
+	function handleMarkerClick({ id }) {
+		const spotName = id.replace(/^spot-/, '');
+		const group = spotGroups.find((g) => g.spot === spotName);
+		if (!group) return null;
+
+		const photo = group.photos[0];
+		const thumb = photo?.thumbnail || photo?.url;
+		let html = '<div style="font-family:system-ui,-apple-system,sans-serif;font-size:13px;color:#212529;line-height:1.4;">';
+		html += `<div style="font-weight:700;margin-bottom:4px;">${esc(group.spot)}</div>`;
+		if (thumb) {
+			const href = `/${encodeURIComponent(collectionSlug)}/photo/${encodeURIComponent(photo.id)}`;
+			html += `<a href="${esc(href)}" style="display:block;margin-bottom:6px;"><img src="${esc(thumb)}" alt="${esc(group.spot)}" style="width:140px;border-radius:4px;"></a>`;
+		}
+		html += `<div style="color:#6c757d;font-size:12px;">${group.photos.length} photo${group.photos.length !== 1 ? 's' : ''}</div>`;
+		html += '</div>';
+
+		// Also scroll to the spot section
+		scrollToSpot(spotName);
+
+		return { content: html, zoomLevel: 12 };
+	}
+
 	function scrollToSpot(spot) {
 		const el = document.getElementById(`spot-${spot.replace(/\s+/g, '-')}`);
 		el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -64,10 +91,9 @@
 				markers={markers}
 				{onboundschange}
 				searchable={true}
-				onmarkerclick={({ id }) => {
-					const spot = id.replace(/^spot-/, '');
-					scrollToSpot(spot);
-				}}
+				infoWindowEnabled={true}
+				onmarkerclick={handleMarkerClick}
+				{gotoTarget}
 			/>
 		</div>
 	{/if}
@@ -95,7 +121,7 @@
 </div>
 
 {#if lightboxPhoto}
-	<Lightbox photo={lightboxPhoto} photos={allPhotosFlat} onclose={closeLightbox} />
+	<Lightbox photo={lightboxPhoto} photos={allPhotosFlat} onclose={closeLightbox} {collectionSlug} />
 {/if}
 
 <style>

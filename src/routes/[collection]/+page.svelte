@@ -7,6 +7,8 @@
 	import SpeciesGrid from '$lib/components/wildlife/SpeciesGrid.svelte';
 	import SpotGallery from '$lib/components/action/SpotGallery.svelte';
 
+	import { page } from '$app/state';
+
 	let { data } = $props();
 
 	let filterSpecies = $state(null);
@@ -26,6 +28,17 @@
 			showAncestryOnMap = false;
 		}
 		prevSlug = slug;
+	});
+
+	// Handle ?mapLat=&mapLng= query params (from "Show on Map" in photo detail)
+	$effect(() => {
+		const params = page.url?.searchParams;
+		if (!params) return;
+		const lat = parseFloat(params.get('mapLat'));
+		const lng = parseFloat(params.get('mapLng'));
+		if (!isNaN(lat) && !isNaN(lng)) {
+			gotoTarget = { lat, lng, zoom: 13, _ts: Date.now() };
+		}
 	});
 
 	let hasMapSection = $derived(
@@ -140,7 +153,7 @@
 	{:else if data.collection.type === 'wildlife'}
 		<section style="margin-top: 32px;">
 			<h2 class="section-label">Sightings Map</h2>
-			<SightingMap photos={data.photos} apiKey={data.googleMapsApiKey} onboundschange={handleBoundsChange} />
+			<SightingMap photos={data.photos} apiKey={data.googleMapsApiKey} onboundschange={handleBoundsChange} collectionSlug={data.collection.slug} {gotoTarget} />
 		</section>
 
 		<section style="margin-top: 32px;">
@@ -153,7 +166,7 @@
 	{:else if data.collection.type === 'action'}
 		<section style="margin-top: 32px;">
 			<h2 class="section-label">Spots</h2>
-			<SpotGallery photos={data.photos} apiKey={data.googleMapsApiKey} onboundschange={handleBoundsChange} />
+			<SpotGallery photos={data.photos} apiKey={data.googleMapsApiKey} onboundschange={handleBoundsChange} collectionSlug={data.collection.slug} {gotoTarget} />
 		</section>
 	{/if}
 
@@ -197,7 +210,7 @@
 			<p class="map-filter-hint">No photos found for {filterSpecies}.</p>
 		{/if}
 		{#if displayPhotos.length > 0 || (!mapFilterActive && !filterSpecies)}
-			<Gallery photos={displayPhotos} columns={4} />
+			<Gallery photos={displayPhotos} columns={4} collectionSlug={data.collection.slug} />
 		{/if}
 	</section>
 </div>

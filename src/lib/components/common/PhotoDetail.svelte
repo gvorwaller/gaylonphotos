@@ -1,11 +1,11 @@
 <script>
 	/**
 	 * Single photo page content with metadata display.
-	 * Props: photo, collection, apiKey
+	 * Props: photo, collection, apiKey, photoNav
 	 */
 	import Map from './Map.svelte';
 
-	let { photo, collection, apiKey = '' } = $props();
+	let { photo, collection, apiKey = '', photoNav = [] } = $props();
 
 	function formatDate(iso) {
 		if (!iso) return null;
@@ -16,6 +16,46 @@
 			});
 		} catch {
 			return iso;
+		}
+	}
+
+	// Navigation
+	let currentIndex = $derived(photoNav.findIndex((p) => p.id === photo.id));
+	let totalPhotos = $derived(photoNav.length);
+	let prevPhoto = $derived(currentIndex > 0 ? photoNav[currentIndex - 1] : null);
+	let nextPhoto = $derived(currentIndex < totalPhotos - 1 ? photoNav[currentIndex + 1] : null);
+
+	function navUrl(navItem) {
+		return `/${encodeURIComponent(collection.slug)}/photo/${encodeURIComponent(navItem.id)}`;
+	}
+
+	function handleKeydown(e) {
+		if (e.key === 'ArrowLeft' && prevPhoto) {
+			window.location.href = navUrl(prevPhoto);
+		} else if (e.key === 'ArrowRight' && nextPhoto) {
+			window.location.href = navUrl(nextPhoto);
+		}
+	}
+
+	// Swipe support
+	let touchStartX = 0;
+	let touchStartY = 0;
+
+	function handleTouchStart(e) {
+		touchStartX = e.touches[0].clientX;
+		touchStartY = e.touches[0].clientY;
+	}
+
+	function handleTouchEnd(e) {
+		const dx = e.changedTouches[0].clientX - touchStartX;
+		const dy = e.changedTouches[0].clientY - touchStartY;
+		// Only trigger on horizontal swipe (not vertical scroll)
+		if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+			if (dx > 0 && prevPhoto) {
+				window.location.href = navUrl(prevPhoto);
+			} else if (dx < 0 && nextPhoto) {
+				window.location.href = navUrl(nextPhoto);
+			}
 		}
 	}
 
@@ -38,11 +78,32 @@
 		if (photo.conditions) items.push({ label: 'Conditions', value: photo.conditions });
 		return items;
 	});
+
+	let mapLink = $derived(
+		photo.gps
+			? `/${encodeURIComponent(collection.slug)}?mapLat=${photo.gps.lat}&mapLng=${photo.gps.lng}`
+			: null
+	);
 </script>
 
+<svelte:window onkeydown={handleKeydown} />
+
 <div class="photo-detail">
-	<div class="photo-main">
+	<div
+		class="photo-main"
+		ontouchstart={handleTouchStart}
+		ontouchend={handleTouchEnd}
+	>
+		{#if prevPhoto}
+			<a href={navUrl(prevPhoto)} class="photo-nav photo-nav-prev" aria-label="Previous photo">&#8249;</a>
+		{/if}
 		<img src={photo.url} alt={photo.description || photo.filename} />
+		{#if nextPhoto}
+			<a href={navUrl(nextPhoto)} class="photo-nav photo-nav-next" aria-label="Next photo">&#8250;</a>
+		{/if}
+		{#if totalPhotos > 1}
+			<div class="photo-counter">{currentIndex + 1} of {totalPhotos}</div>
+		{/if}
 	</div>
 
 	<div class="photo-sidebar">
@@ -69,6 +130,10 @@
 			{/each}
 		</div>
 
+		{#if mapLink}
+			<a href={mapLink} class="show-on-map-link">Show on Map &rarr;</a>
+		{/if}
+
 		{#if photo.gps && apiKey}
 			<div class="photo-map">
 				<Map
@@ -89,9 +154,57 @@
 		gap: 32px;
 		padding: 24px 0;
 	}
+	.photo-main {
+		position: relative;
+	}
 	.photo-main img {
 		width: 100%;
 		border-radius: var(--radius-md);
+	}
+	.photo-nav {
+		position: absolute;
+		top: 50%;
+		transform: translateY(-50%);
+		font-size: 2.5rem;
+		color: #fff;
+		text-decoration: none;
+		background: rgba(0, 0, 0, 0.3);
+		padding: 8px 12px;
+		border-radius: var(--radius-sm);
+		opacity: 0;
+		transition: opacity 0.2s;
+		line-height: 1;
+		z-index: 1;
+	}
+	.photo-main:hover .photo-nav {
+		opacity: 0.7;
+	}
+	.photo-nav:hover {
+		opacity: 1 !important;
+		background: rgba(0, 0, 0, 0.6);
+	}
+	.photo-nav-prev {
+		left: 8px;
+	}
+	.photo-nav-next {
+		right: 8px;
+	}
+	.photo-counter {
+		position: absolute;
+		bottom: 12px;
+		left: 50%;
+		transform: translateX(-50%);
+		background: rgba(0, 0, 0, 0.5);
+		color: #fff;
+		font-size: 0.75rem;
+		font-weight: 600;
+		padding: 4px 12px;
+		border-radius: var(--radius-pill, 20px);
+		opacity: 0;
+		transition: opacity 0.2s;
+	}
+	.photo-main:hover .photo-counter {
+		opacity: 1;
 	}
 	.photo-sidebar {
 		display: flex;
@@ -143,6 +256,16 @@
 	}
 	.meta-value {
 		color: var(--color-text);
+	}
+	.show-on-map-link {
+		display: inline-block;
+		font-size: 0.8rem;
+		font-weight: 600;
+		color: var(--color-primary);
+		text-decoration: none;
+	}
+	.show-on-map-link:hover {
+		text-decoration: underline;
 	}
 	.photo-map {
 		height: 200px;
