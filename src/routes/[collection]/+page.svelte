@@ -82,6 +82,8 @@
 		}
 
 		// Sort by date (oldest first), undated photos at end
+		// Always work on a copy to avoid mutating data.photos in-place
+		if (filtered === data.photos) filtered = [...filtered];
 		filtered.sort((a, b) => {
 			if (!a.date && !b.date) return 0;
 			if (!a.date) return 1;

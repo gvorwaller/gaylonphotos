@@ -3,7 +3,7 @@
 ## Context
 Open td tasks spanning bug fixes, UX improvements, and new features. Organized into phases by dependency and complexity — quick fixes first, then progressively larger changes. Each phase can be committed and deployed independently.
 
-**Last updated:** 2026-03-20
+**Last updated:** 2026-03-21
 
 ---
 
@@ -67,14 +67,16 @@ Open td tasks spanning bug fixes, UX improvements, and new features. Organized i
 
 ---
 
-## ~~Phase 4: Batch Operations & Map UX~~ (partially deployed 2026-03-20)
+## ~~Phase 4: Batch Operations & Map UX~~ DONE (deployed 2026-03-20, 2026-03-21)
 
 ### ~~4a. Batch delete in admin UI (td-286da1)~~ DONE
 - Select mode with checkboxes, Select All / Deselect All, confirmation modal, sequential DELETE with progress
 - **File:** `src/routes/admin/[collection]/+page.svelte`
 
-### 4b. Photo preview on map marker click (td-e259fc)
-**Description:** Show photo thumbnail when clicking a map marker in birds/surfing collections.
+### ~~4b. Photo preview on map marker click (td-e259fc)~~ DONE
+- Wildlife: InfoWindow with thumbnail, species, location, date linked to detail page
+- Action/Surf: InfoWindow with spot name, first photo thumbnail, photo count + scrolls to section
+- **Files:** `SightingMap.svelte`, `SpotGallery.svelte`
 
 ### ~~4c. Global ancestor name search with map zoom (td-2d7177)~~ DONE
 - "In View" / "All" toggle on ancestry search bar; zoom-to-person ⊕ buttons on each ancestor name
@@ -89,17 +91,22 @@ Open td tasks spanning bug fixes, UX improvements, and new features. Organized i
 
 ---
 
-## Phase 5: Photo Detail UX (P3)
+## ~~Phase 5: Photo Detail UX~~ DONE (deployed 2026-03-21)
 *Improvements to the photo detail/lightbox browsing experience.*
 
-### 5a. Photo counter in detail view (td-36e3e0)
-**Description:** Show "1 of 39" (or similar) counter when browsing photos in detail view.
+### ~~5a. Photo counter in detail view (td-36e3e0)~~ DONE
+- "X of N" pill badge in both Lightbox (gallery overlay) and PhotoDetail (`/photo/[id]` page)
+- **Files:** `Lightbox.svelte`, `PhotoDetail.svelte`
 
-### 5b. Swipe through photos in detail view (td-d6b1c7)
-**Description:** Allow swiping (touch) or arrow key navigation through photos in detail view.
+### ~~5b. Swipe through photos in detail view (td-d6b1c7)~~ DONE
+- Arrow keys, touch swipe (60px threshold), trackpad horizontal swipe (debounced deltaX, 80px threshold)
+- Works in both Lightbox and PhotoDetail
+- **Files:** `Lightbox.svelte`, `PhotoDetail.svelte`
 
-### 5c. Photo detail: jump to location on map (td-cd6075)
-**Description:** Show a map pin icon on the detail photo view (only for photos with GPS). Clicking it navigates back to the collection page and zooms the map to the photo's GPS location.
+### ~~5c. Photo detail: jump to location on map (td-cd6075)~~ DONE
+- "Show on Map →" link for GPS-tagged photos in both Lightbox and PhotoDetail
+- Navigates to collection page with `?mapLat=&mapLng=` query params; map pans/zooms to location
+- **Files:** `Lightbox.svelte`, `PhotoDetail.svelte`, `Gallery.svelte`, `[collection]/+page.svelte`, `photo/[id]/+page.server.js`, `photo/[id]/+page.svelte`
 
 ---
 
@@ -125,6 +132,43 @@ Open td tasks spanning bug fixes, UX improvements, and new features. Organized i
 
 ### 7c. User help in hamburger menu (td-41b18a)
 **Description:** Add a help/info section accessible from the hamburger navigation menu.
+
+---
+
+## Phase 8: GEDCOM Re-Import Merge (P1)
+*Smart re-import from FamilyTree 11 with diff preview and app-side override protection.*
+*Design doc: `docs/2026-03-21_gedcom-reimport-merge-design.md`*
+
+### 8a. Override tracking (td-8dfca1, Phase A)
+- Add `appOverrides` object to person records for tracking manual edits
+- Person edit UI in admin ancestry page (name, dates, places, facts)
+- Extend PATCH endpoint for person-level field edits
+- Visual indicators (pencil icon) on overridden fields
+
+### 8b. Diff engine (td-8dfca1, Phase B)
+- `diffAncestry()` function: match by fsId → xref → name+year
+- Produce structured diff with field-level old/new values
+- Auto-reject changes to override-protected fields
+- Detect added/removed persons
+
+### 8c. Preview UI (td-8dfca1, Phase C)
+- "Re-Import" tab in admin ancestry page
+- Upload GEDCOM → diff summary (changed/added/removed/protected counts)
+- Expandable per-person field-level diff with accept/reject toggles
+- Bulk actions: "Accept All Unprotected" / "Reject All"
+
+### 8d. Apply merge (td-8dfca1, Phase D)
+- Apply accepted changes, preserve GPS/geocode data and app overrides
+- Recompute generation/lineage from updated tree structure
+- Rebuild places array, update mergeHistory
+- Confirmation modal with summary before applying
+
+---
+
+## Phase 9: Smoke Test & QA (P3)
+
+### 9a. Add new collection end-to-end test (td-86a93f)
+**Description:** Try adding a new collection (e.g., "floating cottage"). Should create a new JSON file and have all admin and display elements matching the surfing/action collection type.
 
 ---
 
@@ -154,13 +198,15 @@ Open td tasks spanning bug fixes, UX improvements, and new features. Organized i
 | td-fa3441 Itinerary polyline | **REVIEW** | Fixed $effect dep tracking — read both map+polyline upfront (2026-03-19) |
 | ~~td-286da1 Batch delete UI~~ | **DONE** | Select mode, checkboxes, confirm modal, sequential delete (2026-03-20) |
 | ~~td-2d7177 Global ancestor name search~~ | **DONE** | In View/All toggle, zoom-to-person buttons, map pans (2026-03-20) |
-| td-e259fc Map marker photo preview | Open | Photo thumbnail on marker click for birds/surfing (P2) |
+| ~~td-e259fc Map marker photo preview~~ | **DONE** | InfoWindow with thumbnail on marker click for birds/surfing (2026-03-21) |
 | td-617191 Family tree display | Open | Family tree visualization (P2) |
 | td-63cf89 Delete duplicates | Open | Deferred |
 | td-77ddd9 Perceptual hash dedup | Open | Deferred |
-| td-36e3e0 Photo counter in detail | Open | Show "1 of 39" in photo detail view (P3) |
-| td-d6b1c7 Swipe through photos | Open | Touch swipe / arrow key navigation in detail view (P3) |
-| td-cd6075 Photo detail jump to map | Open | Map pin icon to zoom collection map to photo location (P3) |
+| ~~td-36e3e0 Photo counter in detail~~ | **DONE** | "X of N" pill in Lightbox + PhotoDetail (2026-03-21) |
+| ~~td-d6b1c7 Swipe through photos~~ | **DONE** | Arrow keys, touch swipe, trackpad swipe in both views (2026-03-21) |
+| ~~td-cd6075 Photo detail jump to map~~ | **DONE** | "Show on Map" link with ?mapLat/mapLng params (2026-03-21) |
+| td-8dfca1 GEDCOM re-import merge | Open | Smart diff/preview/apply with override protection (P1) |
+| td-86a93f New collection smoke test | Open | Add new collection end-to-end (P3) |
 | td-20ed38 Ancestry gaylon/madonna tags | Open | Color-code names in By Generation tab (P3) |
 | td-3573e3 Admin ancestry real names | Open | Show Gaylon's/Madonna's in admin (P3) |
 | td-3b705b AI location recognition | Open | Gemini vision for photos without GPS (P3) |
@@ -197,12 +243,28 @@ Phase 4 verification:
 - Admin → select multiple photos → "Delete Selected" → confirmation → photos deleted
 - Scandinavia → Family Heritage → search toggle "All" → type name → ⊕ button zooms map to person
 - Map auto-shows ancestry diamonds when zooming to a person
+- Birds → click map marker → InfoWindow with thumbnail, species, date
+- Surfing → click spot marker → InfoWindow with spot name, photo, count + scroll
 
 Phase 5 verification:
-- Photo detail → shows "1 of N" counter
-- Photo detail → swipe or arrow keys navigate between photos
-- Photo detail (with GPS) → map pin icon → navigates to collection map zoomed to location
+- Gallery → click photo → Lightbox shows "X of N" counter at top center
+- Photo detail page → counter pill visible on hover
+- Lightbox → arrow keys, touch swipe, trackpad swipe navigate photos
+- Photo detail → arrow keys, touch swipe, prev/next overlays navigate photos
+- Lightbox (GPS photo) → "Show on Map →" → closes lightbox, navigates to map zoomed to location
+- Photo detail (GPS photo) → "Show on Map →" → navigates to collection map zoomed to location
 
 Phase 6 verification:
 - By Generation tab → ancestor names color-coded by gaylon/madonna lineage
 - Admin ancestry editor → shows "Gaylon's" / "Madonna's" instead of "Wife-Paternal"
+
+Phase 8 verification:
+- Admin → Ancestry → edit a person's name → appOverrides recorded
+- Admin → Ancestry → Re-Import tab → upload new GEDCOM → diff preview shown
+- Changed persons → expand → field-level diff with accept/reject toggles
+- Override-protected fields auto-rejected with lock icon
+- Apply → changes saved, GPS preserved, overrides survive
+
+Phase 9 verification:
+- Admin → Collections → create new "floating cottage" collection (type: action)
+- New JSON file created, admin page functional, public page renders with map + spot gallery

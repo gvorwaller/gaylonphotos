@@ -1,4 +1,4 @@
-import { readJson, writeJson, deleteJson, ensureDir } from './json-store.js';
+import { readJson, writeJson, updateJson, deleteJson, ensureDir } from './json-store.js';
 import { getCollection } from './collections.js';
 import { getItinerary } from './itinerary.js';
 import { join } from 'node:path';
@@ -92,37 +92,167 @@ export async function updateAncestry(collectionSlug, ancestryData) {
 export async function updatePlace(collectionSlug, placeId, lat, lng) {
 	await validateTravelCollection(collectionSlug);
 
-	const filePath = ancestryPath(collectionSlug);
-	const ancestry = await readJson(filePath);
-	if (!ancestry) throw new Error('No ancestry data for this collection');
-
-	const place = ancestry.places.find((p) => p.id === placeId);
-	if (!place) throw new Error(`Place not found: ${placeId}`);
-
-	place.lat = lat;
-	place.lng = lng;
-	place.geocodeStatus = lat != null && lng != null ? 'manual' : 'failed';
-
-	// Recompute nearStop for this place
+	// Pre-fetch itinerary before entering the file lock
 	const itinerary = await getItinerary(collectionSlug);
 	const stops = itinerary?.stops || [];
-	place.nearStop = false;
-	if (place.lat != null && place.lng != null) {
-		for (const stop of stops) {
-			if (stop.lat != null && stop.lng != null && haversineKm(place.lat, place.lng, stop.lat, stop.lng) < 50) {
-				place.nearStop = true;
-				break;
+
+	const filePath = ancestryPath(collectionSlug);
+	let updatedPlace = null;
+
+	await updateJson(filePath, (ancestry) => {
+		const place = ancestry.places.find((p) => p.id === placeId);
+		if (!place) throw new Error(`Place not found: ${placeId}`);
+
+		place.lat = lat;
+		place.lng = lng;
+		place.geocodeStatus = lat != null && lng != null ? 'manual' : 'failed';
+
+		// Recompute nearStop for this place
+		place.nearStop = false;
+		if (place.lat != null && place.lng != null) {
+			for (const stop of stops) {
+				if (stop.lat != null && stop.lng != null && haversineKm(place.lat, place.lng, stop.lat, stop.lng) < 50) {
+					place.nearStop = true;
+					break;
+				}
 			}
 		}
-	}
 
-	await writeJson(filePath, ancestry);
-	return place;
+		updatedPlace = { ...place };
+		return ancestry;
+	});
+
+	return updatedPlace;
 }
 
 export async function clearAncestry(collectionSlug) {
 	await validateTravelCollection(collectionSlug);
 	await deleteJson(ancestryPath(collectionSlug));
+}
+
+// ---------------------------------------------------------------------------
+// Person field override
+// ---------------------------------------------------------------------------
+
+const ALLOWED_OVERRIDE_FIELDS = new Set(['name', 'birthDate', 'birthPlace', 'deathDate', 'deathPlace', 'gender']);
+
+/**
+ * Sync a top-level person field edit into the corresponding fact entry.
+ * rebuildPlaces() derives map/event data from person.facts, so we must
+ * keep facts in sync when birthDate/birthPlace/deathDate/deathPlace change.
+ */
+function syncFieldToFact(person, field, value) {
+	const FIELD_TO_FACT = {
+		birthDate:  { type: 'Birth', prop: 'date' },
+		birthPlace: { type: 'Birth', prop: 'place' },
+		deathDate:  { type: 'Death', prop: 'date' },
+		deathPlace: { type: 'Death', prop: 'place' }
+	};
+
+	const mapping = FIELD_TO_FACT[field];
+	if (!mapping) return;
+
+	if (!person.facts) person.facts = [];
+	let fact = person.facts.find((f) => f.type === mapping.type);
+	if (!fact) {
+		fact = { tag: mapping.type === 'Birth' ? 'BIRT' : 'DEAT', type: mapping.type, date: null, place: null, year: null };
+		person.facts.push(fact);
+	}
+
+	fact[mapping.prop] = value;
+
+	// Keep fact.year in sync with fact.date
+	if (mapping.prop === 'date') {
+		fact.year = extractYear(value || '') ?? null;
+	}
+}
+
+/**
+ * Update one or more fields on a person, creating appOverrides entries.
+ * Each update is { field, value, reason }. If value is null, removes the override.
+ *
+ * @param {string} collectionSlug
+ * @param {string} personId
+ * @param {Array<{ field: string, value: *, reason?: string }>} updates
+ * @returns {Promise<object>} — the updated person
+ */
+export async function updatePersonFields(collectionSlug, personId, updates) {
+	await validateTravelCollection(collectionSlug);
+
+	for (const u of updates) {
+		if (!ALLOWED_OVERRIDE_FIELDS.has(u.field)) {
+			throw new Error(`Field "${u.field}" is not editable. Allowed: ${[...ALLOWED_OVERRIDE_FIELDS].join(', ')}`);
+		}
+	}
+
+	// Fetch itinerary before entering the synchronous updateJson callback
+	const itinerary = await getItinerary(collectionSlug);
+	const stops = itinerary?.stops || [];
+
+	const filePath = ancestryPath(collectionSlug);
+	let updatedPerson = null;
+
+	await updateJson(filePath, (ancestry) => {
+		const person = ancestry.persons.find((p) => p.id === personId);
+		if (!person) throw new Error(`Person not found: ${personId}`);
+
+		for (const { field, value, reason } of updates) {
+			if (value === null || value === undefined) {
+				// Remove override and restore original value
+				if (person.appOverrides?.[field]) {
+					const originalValue = person.appOverrides[field].originalValue;
+					person[field] = originalValue ?? null;
+					syncFieldToFact(person, field, originalValue ?? null);
+					if (field === 'birthDate') {
+						person.birthYear = extractYear(originalValue || '') ?? null;
+					} else if (field === 'deathDate') {
+						person.deathYear = extractYear(originalValue || '') ?? null;
+					}
+					delete person.appOverrides[field];
+					if (Object.keys(person.appOverrides).length === 0) {
+						delete person.appOverrides;
+					}
+				}
+			} else {
+				if (!person.appOverrides) person.appOverrides = {};
+				const existingOverride = person.appOverrides[field];
+				person.appOverrides[field] = {
+					value,
+					originalValue: existingOverride?.originalValue ?? person[field] ?? null,
+					reason: reason || null,
+					editedAt: new Date().toISOString()
+				};
+				person[field] = value;
+				syncFieldToFact(person, field, value);
+
+				if (field === 'birthDate') {
+					person.birthYear = extractYear(value || '') ?? null;
+				} else if (field === 'deathDate') {
+					person.deathYear = extractYear(value || '') ?? null;
+				}
+			}
+		}
+
+		// Rebuild places in case birthPlace/deathPlace changed
+		const existingGeoMap = new Map();
+		for (const place of ancestry.places) {
+			existingGeoMap.set(place.name, {
+				lat: place.lat, lng: place.lng,
+				country: place.country, status: place.geocodeStatus
+			});
+		}
+		ancestry.places = rebuildPlaces(ancestry.persons, existingGeoMap, stops);
+
+		if (ancestry.meta) {
+			ancestry.meta.totalPersons = ancestry.persons.length;
+			ancestry.meta.totalPlaces = ancestry.places.length;
+		}
+
+		updatedPerson = { ...person, appOverrides: person.appOverrides ? { ...person.appOverrides } : undefined };
+		return ancestry;
+	});
+
+	return updatedPerson;
 }
 
 // ---------------------------------------------------------------------------
@@ -969,4 +1099,468 @@ export async function importGedcom(collectionSlug, gedcomText, rootPersonId, max
 	}
 
 	return { ancestry: toSave, geocodeReport };
+}
+
+// ---------------------------------------------------------------------------
+// Diff engine for re-import
+// ---------------------------------------------------------------------------
+
+const DIFF_FIELDS = ['name', 'gender', 'birthDate', 'birthPlace', 'deathDate', 'deathPlace'];
+
+/**
+ * Compare existing ancestry data with a newly parsed GEDCOM and produce
+ * a structured diff showing field-level changes, new persons, and removed persons.
+ *
+ * @param {object} existingAncestry — current ancestry.json data
+ * @param {{ individuals: Map, families: Map }} newParsed — freshly parsed GEDCOM
+ * @param {string} rootPersonId — root person xref from the new GEDCOM
+ * @param {number} maxGenerations
+ * @returns {object} — structured diff
+ */
+export function diffAncestry(existingAncestry, newParsed, rootPersonId, maxGenerations) {
+	const { individuals, families } = newParsed;
+	const genMap = computeGenerations(rootPersonId, individuals, families, maxGenerations);
+
+	// Build "new" persons list from new GEDCOM (same logic as buildAncestry)
+	const newPersons = [];
+	for (const [id, genInfo] of genMap) {
+		const indi = individuals.get(id);
+		if (!indi) continue;
+
+		const birthFact = indi.facts.find((f) => f.type === 'Birth');
+		const deathFact = indi.facts.find((f) => f.type === 'Death');
+
+		const allFacts = [...indi.facts];
+		for (const famId of indi.familySpouse) {
+			const fam = families.get(famId);
+			if (fam) {
+				for (const fact of fam.facts) allFacts.push({ ...fact });
+			}
+		}
+
+		newPersons.push({
+			id,
+			fsId: indi.fsId ?? null,
+			name: indi.name,
+			gender: indi.gender,
+			birthDate: birthFact?.date ?? null,
+			birthPlace: birthFact?.place ?? null,
+			deathDate: deathFact?.date ?? null,
+			deathPlace: deathFact?.place ?? null,
+			generation: genInfo.generation,
+			lineage: genInfo.lineage,
+			lineagePath: genInfo.lineagePath,
+			birthYear: birthFact?.year ?? null,
+			deathYear: deathFact?.year ?? null,
+			facts: allFacts
+				.filter((f) => f.place || f.date)
+				.map((f) => ({ type: f.type, date: f.date ?? null, year: f.year ?? null, place: f.place ?? null }))
+		});
+	}
+
+	// Build lookup maps for existing persons
+	const existingByFsId = new Map();
+	const existingByXref = new Map();
+	const existingByNameYear = new Map();
+	for (const p of existingAncestry.persons) {
+		if (p.fsId) existingByFsId.set(p.fsId, p);
+		existingByXref.set(p.id, p);
+		const key = `${(p.name || '').toLowerCase()}|${p.birthYear ?? ''}`;
+		if (!existingByNameYear.has(key)) existingByNameYear.set(key, p);
+	}
+
+	const matchedExistingIds = new Set();
+	const changes = [];
+	const added = [];
+
+	for (const np of newPersons) {
+		// Match: fsId → xref → name+birthYear
+		let existingPerson = null;
+		let matchType = null;
+
+		if (np.fsId && existingByFsId.has(np.fsId)) {
+			existingPerson = existingByFsId.get(np.fsId);
+			matchType = 'fsId';
+		} else if (existingByXref.has(np.id)) {
+			existingPerson = existingByXref.get(np.id);
+			matchType = 'xref';
+		} else {
+			const key = `${(np.name || '').toLowerCase()}|${np.birthYear ?? ''}`;
+			if (existingByNameYear.has(key)) {
+				existingPerson = existingByNameYear.get(key);
+				matchType = 'fuzzy';
+			}
+		}
+
+		if (!existingPerson) {
+			added.push({
+				id: np.id,
+				fsId: np.fsId,
+				name: np.name,
+				generation: np.generation,
+				lineage: np.lineage,
+				lineagePath: np.lineagePath,
+				birthDate: np.birthDate,
+				birthYear: np.birthYear,
+				birthPlace: np.birthPlace,
+				deathDate: np.deathDate,
+				deathYear: np.deathYear,
+				deathPlace: np.deathPlace,
+				gender: np.gender,
+				facts: np.facts
+			});
+			continue;
+		}
+
+		matchedExistingIds.add(existingPerson.id);
+
+		// Compare fields
+		const fieldChanges = [];
+		for (const field of DIFF_FIELDS) {
+			const oldVal = existingPerson[field] ?? null;
+			const newVal = np[field] ?? null;
+			if (normalize(oldVal) !== normalize(newVal)) {
+				const hasOverride = !!existingPerson.appOverrides?.[field];
+				fieldChanges.push({
+					field,
+					oldValue: oldVal,
+					newValue: newVal,
+					hasOverride,
+					overrideReason: hasOverride ? existingPerson.appOverrides[field].reason : null,
+					action: hasOverride ? 'reject' : 'pending'
+				});
+			}
+		}
+
+		// Compare facts
+		const existingFactKeys = new Set(
+			(existingPerson.facts || []).map((f) => factKey(f))
+		);
+		const newFactKeys = new Set(
+			(np.facts || []).map((f) => factKey(f))
+		);
+
+		for (const f of np.facts || []) {
+			const key = factKey(f);
+			if (!existingFactKeys.has(key)) {
+				fieldChanges.push({
+					field: 'facts',
+					oldValue: null,
+					newValue: `${f.type}: ${f.date || ''} ${f.place || ''}`.trim(),
+					hasOverride: false,
+					overrideReason: null,
+					action: 'pending'
+				});
+			}
+		}
+
+		for (const f of existingPerson.facts || []) {
+			const key = factKey(f);
+			if (!newFactKeys.has(key)) {
+				fieldChanges.push({
+					field: 'facts',
+					oldValue: `${f.type}: ${f.date || ''} ${f.place || ''}`.trim(),
+					newValue: null,
+					hasOverride: false,
+					overrideReason: null,
+					action: 'reject' // default: keep existing facts
+				});
+			}
+		}
+
+		if (fieldChanges.length > 0) {
+			changes.push({
+				personId: existingPerson.id,
+				fsId: existingPerson.fsId,
+				name: existingPerson.name,
+				generation: existingPerson.generation,
+				matchType,
+				fields: fieldChanges
+			});
+		}
+	}
+
+	// Removed persons: in existing but not matched
+	const removed = [];
+	for (const p of existingAncestry.persons) {
+		if (!matchedExistingIds.has(p.id)) {
+			removed.push({
+				id: p.id,
+				fsId: p.fsId,
+				name: p.name,
+				generation: p.generation,
+				lineage: p.lineage
+			});
+		}
+	}
+
+	const protectedOverrides = changes.reduce(
+		(sum, c) => sum + c.fields.filter((f) => f.hasOverride).length, 0
+	);
+
+	return {
+		summary: {
+			matched: matchedExistingIds.size,
+			changed: changes.length,
+			added: added.length,
+			removed: removed.length,
+			protectedOverrides
+		},
+		changes,
+		added,
+		removed,
+		_newParsed: newParsed,
+		_genMap: genMap
+	};
+}
+
+function normalize(val) {
+	if (val == null) return '';
+	return String(val).trim().toLowerCase();
+}
+
+function factKey(f) {
+	return `${f.type || ''}|${f.date || ''}|${f.place || ''}`;
+}
+
+// ---------------------------------------------------------------------------
+// Apply re-import
+// ---------------------------------------------------------------------------
+
+/**
+ * Apply a re-import with the user's accept/reject decisions.
+ *
+ * @param {string} collectionSlug
+ * @param {string} gedcomText — raw GEDCOM text
+ * @param {string} rootPersonId — root person xref
+ * @param {number} maxGenerations
+ * @param {object} decisions
+ *   - changes: [{ personId, fields: [{ field, action: 'accept'|'reject' }] }]
+ *   - addedIds: string[] — IDs of new persons to include
+ *   - removedIds: string[] — IDs of existing persons to remove
+ * @returns {Promise<{ ancestry: object, geocodeReport: object }>}
+ */
+export async function applyReimport(collectionSlug, gedcomText, rootPersonId, maxGenerations, decisions) {
+	await validateTravelCollection(collectionSlug);
+
+	rootPersonId = rootPersonId.replace(/^@?([A-Za-z0-9_]+)@?$/, '@$1@');
+
+	const parsed = parseGedcom(gedcomText);
+	if (!parsed.individuals.has(rootPersonId)) {
+		throw new Error(`Root person not found in GEDCOM: ${rootPersonId}`);
+	}
+
+	// Build decision maps (pure data, no I/O)
+	const changeDecisions = new Map();
+	for (const cd of decisions.changes || []) {
+		const fieldMap = new Map();
+		for (const fd of cd.fields || []) {
+			fieldMap.set(fd.field, fd.action);
+		}
+		changeDecisions.set(cd.personId, fieldMap);
+	}
+	const addedIdsSet = new Set(decisions.addedIds || []);
+	const removedIdsSet = new Set(decisions.removedIds || []);
+
+	// Pre-read existing data to identify new places that need geocoding
+	// (done before the lock so we can do async geocoding)
+	const existingSnapshot = await getAncestry(collectionSlug);
+	if (!existingSnapshot) throw new Error('No existing ancestry data');
+
+	const diffSnapshot = diffAncestry(existingSnapshot, parsed, rootPersonId, maxGenerations);
+	const addedPersonsFromDiff = diffSnapshot.added.filter((p) => addedIdsSet.has(p.id));
+
+	// Collect place names from new persons for geocoding
+	const newPlaceNames = new Set();
+	for (const np of addedPersonsFromDiff) {
+		if (np.birthPlace) newPlaceNames.add(np.birthPlace);
+		if (np.deathPlace) newPlaceNames.add(np.deathPlace);
+		for (const f of np.facts || []) {
+			if (f.place) newPlaceNames.add(f.place);
+		}
+	}
+
+	const snapshotGeoMap = new Map();
+	for (const place of existingSnapshot.places) {
+		snapshotGeoMap.set(place.name, {
+			lat: place.lat, lng: place.lng,
+			country: place.country, status: place.geocodeStatus
+		});
+	}
+	const placesToGeocode = [...newPlaceNames].filter((n) => !snapshotGeoMap.has(n));
+
+	// Geocode new places BEFORE entering the lock (async I/O)
+	let geocoded = new Map();
+	let geocodeReport = { total: 0, ok: 0, approximate: 0, failed: 0, failedPlaces: [] };
+	if (placesToGeocode.length > 0) {
+		geocoded = await geocodePlaces(placesToGeocode);
+		geocodeReport.total = geocoded.size;
+		for (const [name, result] of geocoded) {
+			if (result.status === 'ok') geocodeReport.ok++;
+			else if (result.status === 'approximate') geocodeReport.approximate++;
+			else {
+				geocodeReport.failed++;
+				geocodeReport.failedPlaces.push(name);
+			}
+		}
+	}
+
+	// Pre-fetch itinerary (async I/O, before the lock)
+	const itinerary = await getItinerary(collectionSlug);
+	const stops = itinerary?.stops || [];
+
+	// Precompute generation map from new GEDCOM
+	const { individuals, families } = parsed;
+	const newGenMap = computeGenerations(rootPersonId, individuals, families, maxGenerations);
+
+	// Now apply all changes atomically inside updateJson
+	const filePath = ancestryPath(collectionSlug);
+	await ensureDir(join(DATA_DIR, collectionSlug));
+
+	let resultAncestry = null;
+
+	await updateJson(filePath, (existing) => {
+		// Re-diff against the locked copy of the data (may differ from preview if data changed
+		// between preview and apply). Any new places not in the pre-geocoded set will get
+		// 'failed' geocodeStatus and can be manually corrected in the admin UI.
+		const diff = diffAncestry(existing, parsed, rootPersonId, maxGenerations);
+
+		// Apply field changes to existing persons
+		const existingPersonsMap = new Map();
+		for (const p of existing.persons) {
+			existingPersonsMap.set(p.id, p);
+		}
+
+		for (const change of diff.changes) {
+			const person = existingPersonsMap.get(change.personId);
+			if (!person) continue;
+
+			const fieldDecisions = changeDecisions.get(change.personId);
+
+			for (const fc of change.fields) {
+				const action = fieldDecisions?.get(fc.field) ?? fc.action;
+				if (action !== 'accept') continue;
+
+				if (fc.field === 'facts') continue; // fact merge not implemented
+
+				person[fc.field] = fc.newValue;
+				syncFieldToFact(person, fc.field, fc.newValue);
+
+				if (fc.field === 'birthDate') {
+					person.birthYear = extractYear(fc.newValue || '') ?? null;
+				} else if (fc.field === 'deathDate') {
+					person.deathYear = extractYear(fc.newValue || '') ?? null;
+				}
+
+				if (person.appOverrides?.[fc.field]) {
+					delete person.appOverrides[fc.field];
+					if (Object.keys(person.appOverrides).length === 0) {
+						delete person.appOverrides;
+					}
+				}
+			}
+		}
+
+		// Remove confirmed removals
+		const beforeRemovalCount = existing.persons.length;
+		let updatedPersons = existing.persons.filter((p) => !removedIdsSet.has(p.id));
+		const actuallyRemoved = beforeRemovalCount - updatedPersons.length;
+
+		// Re-derive added persons from the locked diff
+		const lockedAddedPersons = diff.added.filter((p) => addedIdsSet.has(p.id));
+
+		for (const np of lockedAddedPersons) {
+			updatedPersons.push({
+				id: np.id,
+				fsId: np.fsId,
+				name: np.name,
+				gender: np.gender,
+				birthDate: np.birthDate,
+				birthYear: np.birthYear ?? (np.birthDate ? extractYear(np.birthDate) : null),
+				birthPlace: np.birthPlace,
+				deathDate: np.deathDate,
+				deathYear: np.deathYear ?? (np.deathDate ? extractYear(np.deathDate) : null),
+				deathPlace: np.deathPlace,
+				generation: np.generation,
+				lineage: np.lineage,
+				lineagePath: np.lineagePath ?? '',
+				facts: np.facts || []
+			});
+		}
+
+		// Recompute generation/lineage from the new GEDCOM
+		for (const person of updatedPersons) {
+			let newGenInfo = newGenMap.get(person.id);
+			if (!newGenInfo && person.fsId) {
+				for (const [xref, genInfo] of newGenMap) {
+					const indi = individuals.get(xref);
+					if (indi?.fsId === person.fsId) {
+						newGenInfo = genInfo;
+						break;
+					}
+				}
+			}
+			if (newGenInfo) {
+				person.generation = newGenInfo.generation;
+				person.lineage = newGenInfo.lineage;
+				person.lineagePath = newGenInfo.lineagePath;
+			}
+		}
+
+		// Rebuild places preserving existing GPS data + newly geocoded
+		const existingPlaceGeo = new Map();
+		for (const place of existing.places) {
+			existingPlaceGeo.set(place.name, {
+				lat: place.lat, lng: place.lng,
+				country: place.country, status: place.geocodeStatus
+			});
+		}
+		const combinedGeo = new Map(existingPlaceGeo);
+		for (const [name, result] of geocoded) {
+			if (!combinedGeo.has(name)) {
+				combinedGeo.set(name, result);
+			}
+		}
+
+		const places = rebuildPlaces(updatedPersons, combinedGeo, stops);
+		const maxGen = updatedPersons.reduce((max, p) => Math.max(max, p.generation ?? 0), 0);
+
+		const mergeHistoryEntry = {
+			type: 'reimport',
+			fileName: '',
+			appliedAt: new Date().toISOString(),
+			changesApplied: diff.changes.reduce((sum, c) =>
+				sum + c.fields.filter((f) => {
+					const action = changeDecisions.get(c.personId)?.get(f.field) ?? f.action;
+					return action === 'accept';
+				}).length, 0),
+			personsAdded: lockedAddedPersons.length,
+			personsRemoved: actuallyRemoved,
+			protectedOverrides: diff.summary.protectedOverrides
+		};
+
+		resultAncestry = {
+			meta: {
+				...existing.meta,
+				importedAt: new Date().toISOString(),
+				generationCount: maxGen,
+				totalPersons: updatedPersons.length,
+				totalPlaces: places.length,
+				mergeHistory: [
+					...(existing.meta.mergeHistory || []),
+					mergeHistoryEntry
+				]
+			},
+			persons: updatedPersons,
+			places,
+			familyLines: existing.familyLines || [
+				{ id: 'paternal', label: "Father's Line" },
+				{ id: 'maternal', label: "Mother's Line" }
+			]
+		};
+
+		return resultAncestry;
+	});
+
+	return { ancestry: resultAncestry, geocodeReport };
 }

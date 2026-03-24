@@ -91,6 +91,7 @@
 <div class="photo-detail">
 	<div
 		class="photo-main"
+		role="presentation"
 		ontouchstart={handleTouchStart}
 		ontouchend={handleTouchEnd}
 	>

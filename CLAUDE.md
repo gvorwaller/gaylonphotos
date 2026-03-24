@@ -27,6 +27,9 @@ npm run dev
 npm run build
 node build/index.js
 
+# Type checking + Svelte diagnostics (0 warnings baseline — fix any new warnings)
+npm run check
+
 # Create admin credentials
 node scripts/setup-admin.js
 

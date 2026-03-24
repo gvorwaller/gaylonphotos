@@ -4,82 +4,15 @@
 	 * Props: collectionSlug, ancestry
 	 */
 	import { untrack } from 'svelte';
-	import { apiUpload, apiPut, apiDelete } from '$lib/api.js';
+	import { goto } from '$app/navigation';
+	import { apiGet, apiUpload, apiPut, apiPatch, apiDelete } from '$lib/api.js';
+	import { parseGedcomPersonList } from '$lib/gedcom-utils.js';
 	import Modal from '$lib/components/common/Modal.svelte';
 
 	let { collectionSlug, ancestry = null } = $props();
 
 	let localAncestry = $state(null);
 	let loaded = $state(false);
-
-	// --- Client-side GEDCOM person list parser ---
-	// Intentionally simplified regex vs server's parseGedcom — only needs names/births for UI picker.
-	// Server regex separates xref + tag; this regex treats the first token as tag (works because
-	// level 0 records are detected via `value === 'INDI' && tag.startsWith('@')`).
-	function parseGedcomPersonList(text) {
-		text = text.replace(/^\uFEFF/, '');
-		const persons = [];
-		let currentId = null;
-		let name = null;
-		let birthYear = null;
-		let birthPlace = null;
-		let inBirt = false;
-
-		const lines = text.split(/\r\n|\r|\n/);
-		for (const line of lines) {
-			const match = line.match(/^(\d+)\s+(@\S+@|\S+)\s?(.*)?$/);
-			if (!match) continue;
-
-			const level = parseInt(match[1], 10);
-			const tag = match[2];
-			const value = (match[3] || '').trim();
-
-			if (level === 0) {
-				// Flush previous record
-				if (currentId && name) {
-					persons.push({ id: currentId, name, birthYear, birthPlace });
-				}
-				currentId = null;
-				name = null;
-				birthYear = null;
-				birthPlace = null;
-				inBirt = false;
-
-				if (value === 'INDI' && tag.startsWith('@')) {
-					currentId = tag;
-				}
-				continue;
-			}
-
-			if (!currentId) continue;
-
-			if (level === 1) {
-				inBirt = false;
-				if (tag === 'NAME') {
-					const surname = value.match(/\/(.+?)\//);
-					name = surname
-						? `${value.replace(/\/.*?\//, '').trim()} ${surname[1]}`.trim()
-						: value.replace(/\//g, '').trim();
-				} else if (tag === 'BIRT') {
-					inBirt = true;
-				}
-			} else if (level === 2 && inBirt) {
-				if (tag === 'DATE') {
-					const yr = value.match(/\b(\d{4})\b/);
-					if (yr) birthYear = parseInt(yr[1], 10);
-				} else if (tag === 'PLAC') {
-					birthPlace = value;
-				}
-			}
-		}
-		// Flush last record
-		if (currentId && name) {
-			persons.push({ id: currentId, name, birthYear, birthPlace });
-		}
-
-		persons.sort((a, b) => a.name.localeCompare(b.name));
-		return persons;
-	}
 
 	function readFileAsText(file) {
 		return new Promise((resolve, reject) => {
@@ -212,8 +145,8 @@
 	let saved = $state(false);
 	let saveError = $state('');
 	let showClearConfirm = $state(false);
-	let showReimportConfirm = $state(false);
 	let showMergeConfirm = $state(false);
+	let showReimportConfirm = $state(false);
 
 	function handleFileInput(e) {
 		const file = e.target.files?.[0];
@@ -361,6 +294,107 @@
 	let lookupQuery = $state('');
 	let lookupLoading = $state(false);
 	let lookupError = $state('');
+
+	// --- Person edit state ---
+	const EDITABLE_FIELDS = ['name', 'birthDate', 'birthPlace', 'deathDate', 'deathPlace', 'gender'];
+	let editingPersonId = $state(null);
+	let editFields = $state({});
+	let editReason = $state('');
+	let editSaving = $state(false);
+	let editError = $state('');
+
+	function startEditPerson(person) {
+		editingPersonId = person.id;
+		editFields = {};
+		for (const f of EDITABLE_FIELDS) {
+			editFields[f] = person[f] ?? '';
+		}
+		editReason = '';
+		editError = '';
+	}
+
+	function cancelEditPerson() {
+		editingPersonId = null;
+		editFields = {};
+		editReason = '';
+		editError = '';
+	}
+
+	async function savePersonEdit(person) {
+		editSaving = true;
+		editError = '';
+		// Find fields that changed
+		const changed = EDITABLE_FIELDS.filter((f) => {
+			const oldVal = person[f] ?? '';
+			const newVal = editFields[f] ?? '';
+			return oldVal !== newVal;
+		});
+
+		if (changed.length === 0) {
+			cancelEditPerson();
+			editSaving = false;
+			return;
+		}
+
+		// Send all field changes in a single atomic request
+		// Use ?? null (not || null) so empty strings are sent as empty, not as revert
+		const fields = changed.map((field) => ({
+			field,
+			value: editFields[field] ?? null
+		}));
+
+		const result = await apiPatch('/api/ancestry', {
+			collection: collectionSlug,
+			personId: person.id,
+			fields,
+			reason: editReason || undefined
+		});
+
+		if (!result.ok) {
+			editError = result.error;
+			editSaving = false;
+			return;
+		}
+
+		// Update local person data
+		const idx = localAncestry.persons.findIndex((p) => p.id === person.id);
+		if (idx >= 0) {
+			localAncestry.persons[idx] = { ...localAncestry.persons[idx], ...result.data.person };
+		}
+
+		// Reload full ancestry to get updated places
+		const freshGet = await apiGet(`/api/ancestry?collection=${collectionSlug}`);
+		if (freshGet.ok && freshGet.data.ancestry) {
+			localAncestry = freshGet.data.ancestry;
+		}
+
+		editSaving = false;
+		cancelEditPerson();
+	}
+
+	async function revertOverride(person, field) {
+		const result = await apiPatch('/api/ancestry', {
+			collection: collectionSlug,
+			personId: person.id,
+			field,
+			value: null
+		});
+		if (!result.ok) {
+			editError = result.error || 'Failed to revert override';
+			return;
+		}
+		// Re-fetch full ancestry to get updated places (revert may change birthPlace/deathPlace)
+		const freshGet = await apiGet(`/api/ancestry?collection=${collectionSlug}`);
+		if (freshGet.ok && freshGet.data.ancestry) {
+			localAncestry = freshGet.data.ancestry;
+		} else {
+			// Fallback: at least update the person locally
+			const idx = localAncestry.persons.findIndex((p) => p.id === person.id);
+			if (idx >= 0) {
+				localAncestry.persons[idx] = { ...localAncestry.persons[idx], ...result.data.person };
+			}
+		}
+	}
 
 	function updatePlaceFull(placeId, lat, lng, country, status) {
 		localAncestry = {
@@ -670,7 +704,14 @@
 			<div class="persons-list">
 				{#each localAncestry.persons as person (person.id)}
 					<div class="person-row">
-						<span class="person-name">{person.name}</span>
+						<span class="person-name">
+							{person.name}
+							{#if person.appOverrides}
+								{#each Object.keys(person.appOverrides) as overField}
+									<span class="override-badge" title="{overField}: {person.appOverrides[overField].reason || 'manually edited'}">&#9998;</span>
+								{/each}
+							{/if}
+						</span>
 						<span class="person-dates">
 							{person.birthYear ?? '?'}–{person.deathYear ?? '?'}
 						</span>
@@ -679,7 +720,52 @@
 						{#if person.fsId}
 							<a href="https://www.familysearch.org/tree/person/details/{person.fsId}" target="_blank" rel="noopener" class="fs-link">FS</a>
 						{/if}
+						<button class="edit-person-btn" title="Edit person fields" onclick={() => startEditPerson(person)} disabled={editingPersonId === person.id}>&#9998;</button>
 					</div>
+					{#if editingPersonId === person.id}
+						<div class="person-edit-panel">
+							{#each EDITABLE_FIELDS as field}
+								<div class="edit-field-row">
+									<!-- svelte-ignore a11y_label_has_associated_control -->
+									<label class="edit-field-label">
+										{field}
+										{#if person.appOverrides?.[field]}
+											<span class="override-indicator" title="Override: {person.appOverrides[field].reason || 'manually edited'}">&#128274;</span>
+										{/if}
+									</label>
+									<input
+										type="text"
+										class="edit-field-input"
+										class:has-override={person.appOverrides?.[field]}
+										value={editFields[field] ?? ''}
+										oninput={(e) => editFields[field] = e.target.value}
+									/>
+									{#if person.appOverrides?.[field]}
+										<button class="btn btn-outline btn-xs" onclick={() => revertOverride(person, field)} title="Revert to original">Revert</button>
+									{/if}
+								</div>
+							{/each}
+							<div class="edit-field-row">
+								<!-- svelte-ignore a11y_label_has_associated_control -->
+								<label class="edit-field-label">Reason</label>
+								<input
+									type="text"
+									class="edit-field-input"
+									placeholder="Optional reason for changes..."
+									bind:value={editReason}
+								/>
+							</div>
+							{#if editError}
+								<div class="field-error">{editError}</div>
+							{/if}
+							<div class="edit-actions">
+								<button class="btn btn-primary btn-sm" onclick={() => savePersonEdit(person)} disabled={editSaving}>
+									{editSaving ? 'Saving...' : 'Save'}
+								</button>
+								<button class="btn btn-outline btn-sm" onclick={cancelEditPerson}>Cancel</button>
+							</div>
+						</div>
+					{/if}
 				{/each}
 			</div>
 
@@ -853,19 +939,19 @@
 	{/if}
 </div>
 
-<Modal title="Re-import GEDCOM" show={showReimportConfirm} onclose={() => showReimportConfirm = false}>
-	<p>Unsaved edits will be lost. Continue to re-import?</p>
-	{#snippet actions()}
-		<button class="btn btn-outline btn-sm" onclick={() => showReimportConfirm = false}>Cancel</button>
-		<button class="btn btn-primary btn-sm" onclick={() => { showReimportConfirm = false; localAncestry = null; selectedFile = null; geocodeReport = null; importError = ''; mergeMode = false; mergeFile = null; mergeError = ''; mergeReport = null; }}>Re-import</button>
-	{/snippet}
-</Modal>
-
 <Modal title="Merge GEDCOM" show={showMergeConfirm} onclose={() => showMergeConfirm = false}>
 	<p>Merging will read ancestry data from disk. Any unsaved edits (e.g. coordinate fixes) will be lost. Save first if needed.</p>
 	{#snippet actions()}
 		<button class="btn btn-outline btn-sm" onclick={() => showMergeConfirm = false}>Cancel</button>
 		<button class="btn btn-primary btn-sm" onclick={() => { showMergeConfirm = false; doMerge(); }}>Continue Merge</button>
+	{/snippet}
+</Modal>
+
+<Modal title="Navigate to Re-import" show={showReimportConfirm} onclose={() => showReimportConfirm = false}>
+	<p>Navigating to re-import will discard any unsaved edits (e.g. coordinate fixes). Save first if needed.</p>
+	{#snippet actions()}
+		<button class="btn btn-outline btn-sm" onclick={() => showReimportConfirm = false}>Cancel</button>
+		<button class="btn btn-primary btn-sm" onclick={() => { showReimportConfirm = false; goto(`/admin/${collectionSlug}/ancestry/reimport`); }}>Continue</button>
 	{/snippet}
 </Modal>
 
@@ -1272,6 +1358,77 @@
 		padding: 1px 4px;
 		border: 1px solid var(--color-primary);
 		border-radius: 3px;
+	}
+	/* Person edit */
+	.edit-person-btn {
+		background: none;
+		border: 1px solid var(--color-border);
+		border-radius: 3px;
+		cursor: pointer;
+		font-size: 0.75rem;
+		padding: 2px 4px;
+		line-height: 1;
+	}
+	.edit-person-btn:hover:not(:disabled) {
+		background: var(--color-surface);
+		border-color: var(--color-primary);
+	}
+	.edit-person-btn:disabled {
+		opacity: 0.3;
+		cursor: default;
+	}
+	.override-badge {
+		font-size: 0.6rem;
+		color: #1565c0;
+		background: #e3f2fd;
+		padding: 0 3px;
+		border-radius: 2px;
+		margin-left: 2px;
+		vertical-align: middle;
+	}
+	.person-edit-panel {
+		padding: 12px 16px;
+		background: var(--color-surface);
+		border-bottom: 1px solid var(--color-border);
+		border-left: 3px solid var(--color-primary);
+	}
+	.edit-field-row {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		margin-bottom: 6px;
+	}
+	.edit-field-label {
+		font-size: 0.75rem;
+		font-weight: 600;
+		color: var(--color-text-muted);
+		min-width: 80px;
+		text-transform: capitalize;
+	}
+	.edit-field-input {
+		flex: 1;
+		padding: 4px 8px;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		font-size: 0.8rem;
+		font-family: inherit;
+	}
+	.edit-field-input:focus {
+		outline: none;
+		border-color: var(--color-primary);
+	}
+	.edit-field-input.has-override {
+		background: #e3f2fd;
+		border-color: #1565c0;
+	}
+	.override-indicator {
+		font-size: 0.65rem;
+		margin-left: 2px;
+	}
+	.edit-actions {
+		display: flex;
+		gap: 6px;
+		margin-top: 8px;
 	}
 	.manage-actions {
 		display: flex;
