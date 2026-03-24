@@ -3,6 +3,7 @@ import {
 	getAncestry,
 	updateAncestry,
 	updatePlace,
+	updatePersonFields,
 	clearAncestry,
 	importGedcom
 } from '$lib/server/ancestry.js';
@@ -150,7 +151,7 @@ export async function PUT({ request }) {
 	}
 }
 
-/** PATCH /api/ancestry — Update a single place's coordinates (auth required) */
+/** PATCH /api/ancestry — Update a single place's coordinates OR a person field (auth required) */
 export async function PATCH({ request }) {
 	let body;
 	try {
@@ -159,13 +160,58 @@ export async function PATCH({ request }) {
 		return json({ error: 'Invalid JSON' }, { status: 400 });
 	}
 
-	const { collection, placeId, lat, lng } = body;
-	if (!collection || !placeId) {
-		return json({ error: 'collection and placeId required' }, { status: 400 });
+	const { collection } = body;
+	if (!collection) {
+		return json({ error: 'collection required' }, { status: 400 });
 	}
-
 	if (!SLUG_RE.test(collection)) {
 		return json({ error: 'Invalid collection slug' }, { status: 400 });
+	}
+
+	// Detect request type by body shape
+	if (body.personId && (body.field || body.fields)) {
+		// Person field override (single or batch)
+		const { personId, reason } = body;
+		if (typeof personId !== 'string') {
+			return json({ error: 'personId must be a string' }, { status: 400 });
+		}
+
+		// Normalize single-field and multi-field into an array of updates
+		let updates;
+		if (body.fields && Array.isArray(body.fields)) {
+			updates = body.fields.map(f => ({
+				field: f.field,
+				value: f.value,
+				reason: f.reason ?? reason ?? undefined
+			}));
+		} else if (body.field) {
+			updates = [{ field: body.field, value: body.value, reason: reason ?? undefined }];
+		} else {
+			return json({ error: 'field or fields required' }, { status: 400 });
+		}
+
+		for (const u of updates) {
+			if (typeof u.field !== 'string') {
+				return json({ error: 'Each field must be a string' }, { status: 400 });
+			}
+		}
+
+		try {
+			const person = await updatePersonFields(collection, personId, updates);
+			return json({ person });
+		} catch (err) {
+			const msg = err.message || '';
+			const status = msg.includes('not found') ? 404
+				: msg.includes('not editable') || msg.includes('not "travel"') ? 400
+				: 500;
+			return json({ error: status === 500 ? 'Failed to update person' : msg }, { status });
+		}
+	}
+
+	// Place coordinate update (existing behavior)
+	const { placeId, lat, lng } = body;
+	if (!placeId) {
+		return json({ error: 'placeId (or personId + field) required' }, { status: 400 });
 	}
 
 	// lat/lng can be null (to clear) or numbers

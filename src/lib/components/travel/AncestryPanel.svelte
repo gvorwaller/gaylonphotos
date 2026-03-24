@@ -454,7 +454,7 @@
 															{person.name}
 														</button>
 														{#if findPersonLocation(person)}
-															<button class="goto-btn" onclick={() => gotoPersonLocation(person)} title="Zoom map to this person's location">&#8853;</button>
+															<button class="goto-btn" onclick={() => gotoPersonLocation(person)} title="Show on map">&#x1F4CD; Map</button>
 														{/if}
 														{#if person.fsId}
 															<a href={fsLink(person)} target="_blank" rel="noopener noreferrer" class="fs-link" title="View on FamilySearch">FS</a>
@@ -520,7 +520,7 @@
 					{person.name}
 				</button>
 				{#if findPersonLocation(person)}
-					<button class="goto-btn" onclick={() => gotoPersonLocation(person)} title="Zoom map to this person's location">&#8853;</button>
+					<button class="goto-btn" onclick={() => gotoPersonLocation(person)} title="Show on map">&#x1F4CD; Map</button>
 				{/if}
 				{#if person.fsId}
 					<a href={fsLink(person)} target="_blank" rel="noopener noreferrer" class="fs-link" title="View on FamilySearch">FS</a>
@@ -817,20 +817,20 @@
 		color: var(--color-primary);
 	}
 	.goto-btn {
-		background: none;
-		border: 1px solid var(--color-border);
-		border-radius: 3px;
-		padding: 0 4px;
-		font-size: 0.75rem;
+		background: #e8f5e9;
+		border: 1px solid #a5d6a7;
+		border-radius: 4px;
+		padding: 1px 5px;
+		font-size: 0.8rem;
 		cursor: pointer;
-		color: var(--color-text-muted);
+		color: #388e3c;
 		vertical-align: middle;
 		line-height: 1.2;
-		transition: color 0.1s, border-color 0.1s;
+		transition: background 0.1s, border-color 0.1s;
 	}
 	.goto-btn:hover {
-		color: var(--color-primary);
-		border-color: var(--color-primary);
+		background: #c8e6c9;
+		border-color: #66bb6a;
 	}
 	.fs-link {
 		font-size: 0.65rem;

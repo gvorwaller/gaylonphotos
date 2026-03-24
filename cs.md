@@ -93,6 +93,11 @@ Admin sessions live in a Map in the Node process. Every PM2 restart (including d
 - **Use absolute paths** when possible to avoid directory confusion
 - **Commits**: Only commit when explicitly asked
 
+### Verification Commands
+- `npm run build` — production build (always run after code changes)
+- `npm run check` — `svelte-kit sync && svelte-check` (type checking + Svelte diagnostics, 0 warnings baseline)
+- Run both before committing. If `npm run check` reports new warnings, fix them before commit.
+
 ---
 
 ## State Tracking Tools

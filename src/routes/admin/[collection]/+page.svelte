@@ -2,6 +2,7 @@
 	import PhotoUploader from '$lib/components/admin/PhotoUploader.svelte';
 	import PhotoEditor from '$lib/components/admin/PhotoEditor.svelte';
 	import { apiPost, apiDelete } from '$lib/api.js';
+	import { invalidateAll } from '$app/navigation';
 	import Modal from '$lib/components/common/Modal.svelte';
 
 	let { data } = $props();
@@ -140,6 +141,140 @@
 	function cancelAutoId() {
 		autoIdCancelled = true;
 	}
+
+	// --- Auto-Locate (AI geolocation) ---
+	let unlocatedPhotos = $derived(photos.filter((p) => !p.gps || p.gps.lat == null || p.gps.lng == null));
+	let showAutoLocateConfirm = $state(false);
+	let autoLocateProgress = $state(null);
+	let autoLocateCancelled = false;
+	let autoLocateResults = $state(null); // array of results from API
+	let showAutoLocateReview = $state(false);
+	let autoLocateApprovals = $state(new Set()); // photoIds approved for saving
+	let autoLocateSaving = $state(false);
+
+	let locatedResults = $derived(
+		autoLocateResults?.filter((r) => r.status === 'located') ?? []
+	);
+	let approvedCount = $derived(autoLocateApprovals.size);
+
+	async function bulkAutoLocate() {
+		showAutoLocateConfirm = false;
+		if (autoLocateProgress) return;
+		const targets = [...unlocatedPhotos];
+		if (targets.length === 0) return;
+
+		autoLocateCancelled = false;
+		autoLocateResults = [];
+		autoLocateProgress = { current: 0, total: targets.length, located: 0, errors: 0 };
+
+		for (let i = 0; i < targets.length; i++) {
+			if (autoLocateCancelled) break;
+
+			const result = await apiPost('/api/geovision', {
+				collection: data.collection.slug,
+				photoIds: [targets[i].id]
+			});
+
+			if (result.ok && result.data.results?.length > 0) {
+				const r = result.data.results[0];
+				autoLocateResults = [...autoLocateResults, r];
+				if (r.status === 'located') {
+					autoLocateProgress.located++;
+				} else if (r.status === 'rate-limited') {
+					autoLocateProgress.errors++;
+					autoLocateProgress.current = i + 1;
+					autoLocateCancelled = true;
+					autoLocateProgress.rateLimited = true;
+					break;
+				}
+			} else {
+				autoLocateResults = [...autoLocateResults, {
+					photoId: targets[i].id,
+					status: 'failed',
+					reason: result.error || 'API error',
+					thumbnail: targets[i].thumbnail,
+					filename: targets[i].filename
+				}];
+				autoLocateProgress.errors++;
+			}
+			autoLocateProgress.current = i + 1;
+		}
+
+		// Processing done — auto-approve high-confidence results by default
+		const approved = new Set();
+		for (const r of autoLocateResults) {
+			if (r.status === 'located' && r.confidence === 'high') {
+				approved.add(r.photoId);
+			}
+		}
+		autoLocateApprovals = approved;
+
+		autoLocateProgress = null;
+		if (autoLocateResults.some((r) => r.status === 'located')) {
+			showAutoLocateReview = true;
+		}
+	}
+
+	function cancelAutoLocate() {
+		autoLocateCancelled = true;
+	}
+
+	function toggleLocateApproval(photoId) {
+		const next = new Set(autoLocateApprovals);
+		if (next.has(photoId)) next.delete(photoId);
+		else next.add(photoId);
+		autoLocateApprovals = next;
+	}
+
+	function approveAllLocations() {
+		autoLocateApprovals = new Set(locatedResults.map((r) => r.photoId));
+	}
+
+	function rejectAllLocations() {
+		autoLocateApprovals = new Set();
+	}
+
+	let _saveLock = false;
+	async function saveApprovedLocations() {
+		if (_saveLock || approvedCount === 0) return;
+		_saveLock = true;
+		autoLocateSaving = true;
+
+		const approvals = locatedResults
+			.filter((r) => autoLocateApprovals.has(r.photoId))
+			.map((r) => ({
+				photoId: r.photoId,
+				lat: r.lat,
+				lng: r.lng,
+				placeName: r.placeName
+			}));
+
+		const result = await apiPost('/api/geovision', {
+			collection: data.collection.slug,
+			photoIds: approvals.map((a) => a.photoId),
+			action: 'apply',
+			approvals
+		});
+
+		if (result.ok) {
+			// Update local photo state for each saved photo
+			for (const r of result.data.results) {
+				if (r.status === 'saved' && r.photo) {
+					handleUpdated(r.photo);
+				}
+			}
+			// Invalidate page data so SvelteKit re-fetches from server
+			await invalidateAll();
+		} else {
+			console.error('[geovision] Save failed:', result.error);
+		}
+
+		autoLocateSaving = false;
+		_saveLock = false;
+		showAutoLocateReview = false;
+		autoLocateResults = null;
+		autoLocateApprovals = new Set();
+	}
 </script>
 
 <div>
@@ -160,6 +295,24 @@
 					({autoIdProgress.identified} identified)
 				</span>
 				<button class="btn btn-outline btn-sm" onclick={cancelAutoId}>Stop</button>
+			{/if}
+			{#if unlocatedPhotos.length > 0 && !autoLocateProgress}
+				<button class="btn btn-outline btn-sm" onclick={() => showAutoLocateConfirm = true}>
+					Auto-locate {unlocatedPhotos.length} photo{unlocatedPhotos.length !== 1 ? 's' : ''}
+				</button>
+			{/if}
+			{#if autoLocateProgress}
+				<span class="auto-id-progress">
+					{#if autoLocateProgress.rateLimited}
+						Rate limited — quota exceeded. Wait or enable billing.
+					{:else}
+						Locating... {autoLocateProgress.current}/{autoLocateProgress.total}
+						({autoLocateProgress.located} located)
+					{/if}
+				</span>
+				{#if !autoLocateProgress.rateLimited}
+					<button class="btn btn-outline btn-sm" onclick={cancelAutoLocate}>Stop</button>
+				{/if}
 			{/if}
 			{#if untaggedCount > 0}
 				<a href="/admin/{data.collection.slug}/geotag" class="btn btn-outline btn-sm">
@@ -274,6 +427,88 @@
 		</button>
 	{/snippet}
 </Modal>
+
+<Modal title="Auto-Locate Photos" show={showAutoLocateConfirm} onclose={() => showAutoLocateConfirm = false}>
+	<p>Use AI vision (Gemini) to identify locations for <strong>{unlocatedPhotos.length}</strong>
+		photo{unlocatedPhotos.length !== 1 ? 's' : ''} without GPS data.</p>
+	<p class="cost-estimate">Estimated cost: ~${(unlocatedPhotos.length * 0.002).toFixed(3)}</p>
+	<p style="font-size: 0.8rem; color: var(--color-text-muted);">
+		Results will be shown for your review before saving. Photos with existing GPS will be skipped.
+	</p>
+	{#snippet actions()}
+		<button class="btn btn-outline btn-sm" onclick={() => showAutoLocateConfirm = false}>Cancel</button>
+		<button class="btn btn-primary btn-sm" onclick={bulkAutoLocate}>
+			Locate {unlocatedPhotos.length} Photos
+		</button>
+	{/snippet}
+</Modal>
+
+{#if showAutoLocateReview && autoLocateResults}
+	<div class="review-overlay" role="dialog" aria-modal="true" aria-label="Review AI Locations">
+		<div class="review-panel">
+			<div class="review-header">
+				<h3>Review AI Locations</h3>
+				<button class="modal-close" onclick={() => { showAutoLocateReview = false; autoLocateResults = null; }} aria-label="Close">&times;</button>
+			</div>
+
+			<div class="review-summary">
+				<span class="review-stat">{locatedResults.length} located</span>
+				<span class="review-stat">{autoLocateResults.filter((r) => r.status !== 'located').length} failed</span>
+				<span class="review-divider">|</span>
+				<button class="btn btn-outline btn-xs" onclick={approveAllLocations}>Approve All</button>
+				<button class="btn btn-outline btn-xs" onclick={rejectAllLocations}>Reject All</button>
+			</div>
+
+			<div class="review-list">
+				{#each locatedResults as result (result.photoId)}
+					<div class="review-item" class:approved={autoLocateApprovals.has(result.photoId)}>
+						<button class="review-toggle" onclick={() => toggleLocateApproval(result.photoId)}>
+							<span class="check-box" class:checked={autoLocateApprovals.has(result.photoId)}>
+								{#if autoLocateApprovals.has(result.photoId)}&#10003;{/if}
+							</span>
+						</button>
+						<img class="review-thumb" src={result.thumbnail} alt={result.filename} />
+						<div class="review-info">
+							<div class="review-filename">{result.filename}</div>
+							<div class="review-place">{result.placeName || 'Unknown'}</div>
+							<div class="review-reasoning">{result.reasoning}</div>
+						</div>
+						<span class="confidence-badge confidence-{result.confidence}">{result.confidence}</span>
+					</div>
+				{/each}
+
+				{#each autoLocateResults.filter((r) => r.status !== 'located') as result (result.photoId)}
+					<div class="review-item review-failed">
+						<span class="review-toggle-placeholder"></span>
+						<img class="review-thumb" src={result.thumbnail} alt={result.filename || result.photoId} />
+						<div class="review-info">
+							<div class="review-filename">{result.filename || result.photoId}</div>
+							<div class="review-reasoning">{result.reason || 'Could not determine location'}</div>
+						</div>
+						<span class="confidence-badge confidence-none">none</span>
+					</div>
+				{/each}
+			</div>
+
+			<div class="review-actions">
+				<button class="btn btn-outline btn-sm" onclick={() => { showAutoLocateReview = false; autoLocateResults = null; }}>
+					Cancel
+				</button>
+				<button
+					class="btn btn-primary btn-sm"
+					disabled={approvedCount === 0 || autoLocateSaving}
+					onclick={saveApprovedLocations}
+				>
+					{#if autoLocateSaving}
+						Saving...
+					{:else}
+						Save {approvedCount} Location{approvedCount !== 1 ? 's' : ''}
+					{/if}
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
 
 <style>
 	.page-header {
@@ -403,5 +638,149 @@
 	.selectable-photo-content {
 		flex: 1;
 		min-width: 0;
+	}
+
+	/* --- Auto-locate review panel --- */
+	.review-overlay {
+		position: fixed;
+		inset: 0;
+		background: rgba(0, 0, 0, 0.5);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		z-index: 1000;
+	}
+	.review-panel {
+		background: #fff;
+		border-radius: var(--radius-lg);
+		width: 90vw;
+		max-width: 720px;
+		max-height: 85vh;
+		display: flex;
+		flex-direction: column;
+		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+	}
+	.review-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 16px 20px;
+		border-bottom: 1px solid var(--color-border);
+	}
+	.review-header h3 {
+		font-size: 1.1rem;
+		font-weight: 700;
+		margin: 0;
+	}
+	.review-summary {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		padding: 10px 20px;
+		background: #f8f9fa;
+		border-bottom: 1px solid var(--color-border);
+		font-size: 0.8rem;
+	}
+	.review-stat {
+		font-weight: 600;
+		color: var(--color-text-muted);
+	}
+	.review-divider {
+		color: #dee2e6;
+	}
+	.review-list {
+		overflow-y: auto;
+		padding: 12px 20px;
+		flex: 1;
+	}
+	.review-item {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		padding: 8px 0;
+		border-bottom: 1px solid #f0f0f0;
+	}
+	.review-item:last-child {
+		border-bottom: none;
+	}
+	.review-item.approved {
+		background: #f0faf0;
+		margin: 0 -20px;
+		padding: 8px 20px;
+	}
+	.review-item.review-failed {
+		opacity: 0.5;
+	}
+	.review-toggle {
+		background: none;
+		border: none;
+		cursor: pointer;
+		padding: 2px;
+		flex-shrink: 0;
+	}
+	.review-toggle-placeholder {
+		width: 22px;
+		flex-shrink: 0;
+	}
+	.review-thumb {
+		width: 48px;
+		height: 48px;
+		object-fit: cover;
+		border-radius: 4px;
+		flex-shrink: 0;
+	}
+	.review-info {
+		flex: 1;
+		min-width: 0;
+	}
+	.review-filename {
+		font-size: 0.8rem;
+		font-weight: 600;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.review-place {
+		font-size: 0.85rem;
+		color: var(--color-text);
+	}
+	.review-reasoning {
+		font-size: 0.75rem;
+		color: var(--color-text-muted);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.confidence-badge {
+		font-size: 0.65rem;
+		font-weight: 700;
+		text-transform: uppercase;
+		padding: 2px 6px;
+		border-radius: 3px;
+		flex-shrink: 0;
+	}
+	.confidence-high {
+		background: #d4edda;
+		color: #155724;
+	}
+	.confidence-medium {
+		background: #fff3cd;
+		color: #856404;
+	}
+	.confidence-low {
+		background: #f8d7da;
+		color: #721c24;
+	}
+	.confidence-none {
+		background: #e9ecef;
+		color: #6c757d;
+	}
+	.review-actions {
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		gap: 8px;
+		padding: 12px 20px;
+		border-top: 1px solid var(--color-border);
 	}
 </style>
