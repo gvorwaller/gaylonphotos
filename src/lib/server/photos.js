@@ -101,7 +101,8 @@ async function extractExif(buffer) {
 				'LensModel', 'LensMake',
 				'FocalLength', 'FocalLengthIn35mmFormat',
 				'ISO', 'FNumber', 'ExposureTime',
-				'GPSLatitude', 'GPSLongitude'
+				'GPSLatitude', 'GPSLongitude',
+				'GPSLatitudeRef', 'GPSLongitudeRef'
 			]
 		});
 		if (!exif) return emptyExif();

@@ -6,8 +6,9 @@
 	import { apiPost, apiPut, apiDelete } from '$lib/api.js';
 	import { reverseGeocode } from '$lib/geocoding.js';
 	import Modal from '$lib/components/common/Modal.svelte';
+	import AdminPhotoLightbox from '$lib/components/admin/AdminPhotoLightbox.svelte';
 
-	let { photo, collectionSlug = '', collectionType = 'travel', apiKey = '', onupdated = null, ondeleted = null } = $props();
+	let { photo, collectionSlug = '', collectionType = 'travel', apiKey = '', onupdated = null, ondeleted = null, onpreview = null } = $props();
 
 	// Track whether we've already geocoded this photo to prevent re-firing (intentionally not $state)
 	let hasGeocoded = false;
@@ -136,7 +137,9 @@
 
 <div class="editor">
 	<div class="editor-preview">
-		<img src={photo.thumbnail} alt={photo.filename} />
+		<button class="preview-btn" onclick={() => onpreview?.(photo)} aria-label="Preview {photo.filename}">
+			<img src={photo.thumbnail} alt={photo.filename} />
+		</button>
 		<div class="editor-meta">
 			<div class="editor-filename">{photo.filename}</div>
 			<div class="editor-gps">
@@ -239,6 +242,17 @@
 		flex-shrink: 0;
 		width: 100px;
 		text-align: center;
+	}
+	.preview-btn {
+		background: none;
+		border: none;
+		padding: 0;
+		cursor: pointer;
+		border-radius: var(--radius-sm);
+		transition: opacity 0.15s;
+	}
+	.preview-btn:hover {
+		opacity: 0.8;
 	}
 	.editor-preview img {
 		width: 100px;

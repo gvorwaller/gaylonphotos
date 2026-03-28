@@ -1,6 +1,7 @@
 <script>
 	import PhotoUploader from '$lib/components/admin/PhotoUploader.svelte';
 	import PhotoEditor from '$lib/components/admin/PhotoEditor.svelte';
+	import AdminPhotoLightbox from '$lib/components/admin/AdminPhotoLightbox.svelte';
 	import { apiPost, apiDelete } from '$lib/api.js';
 	import { invalidateAll } from '$app/navigation';
 	import Modal from '$lib/components/common/Modal.svelte';
@@ -41,6 +42,18 @@
 	}
 
 	let untaggedCount = $derived(photos.filter((p) => p.gpsSource === null).length);
+
+	// --- Photo lightbox preview ---
+	let previewPhoto = $state(null);
+
+	function handlePreview(photo) {
+		previewPhoto = photo;
+	}
+
+	function handleLightboxDeleted(photoId) {
+		handleDeleted(photoId);
+		previewPhoto = null;
+	}
 
 	// --- Multi-select & batch delete ---
 	let selectMode = $state(false);
@@ -386,6 +399,7 @@
 									apiKey={data.googleMapsApiKey}
 									onupdated={handleUpdated}
 									ondeleted={() => handleDeleted(photo.id)}
+									onpreview={handlePreview}
 								/>
 							</div>
 						</div>
@@ -397,6 +411,7 @@
 							apiKey={data.googleMapsApiKey}
 							onupdated={handleUpdated}
 							ondeleted={() => handleDeleted(photo.id)}
+							onpreview={handlePreview}
 						/>
 					{/if}
 				{/each}
@@ -404,6 +419,16 @@
 		{/if}
 	</section>
 </div>
+
+{#if previewPhoto}
+	<AdminPhotoLightbox
+		photo={previewPhoto}
+		{photos}
+		collectionSlug={data.collection.slug}
+		onclose={() => previewPhoto = null}
+		ondeleted={handleLightboxDeleted}
+	/>
+{/if}
 
 <Modal title="Delete Selected Photos" show={showBatchDeleteConfirm} onclose={() => showBatchDeleteConfirm = false}>
 	<p>Are you sure you want to delete <strong>{selectedCount}</strong> photo{selectedCount !== 1 ? 's' : ''}? This cannot be undone.</p>

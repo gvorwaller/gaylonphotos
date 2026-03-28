@@ -9,6 +9,7 @@
 	import GoogleMap from '$lib/components/common/Map.svelte';
 	import { apiPost, apiPut } from '$lib/api.js';
 	import { reverseGeocode } from '$lib/geocoding.js';
+	import AdminPhotoLightbox from '$lib/components/admin/AdminPhotoLightbox.svelte';
 
 	let { collectionSlug, photos = [], allPhotos = [], apiKey = '' } = $props();
 
@@ -170,6 +171,14 @@
 	}
 
 	let selectedCount = $derived(selectedIds.size);
+
+	// Photo preview lightbox
+	let previewPhoto = $state(null);
+
+	function openPreview(e, photo) {
+		e.stopPropagation();
+		previewPhoto = photo;
+	}
 	let canAssign = $derived(selectedCount > 0 && pendingCoords !== null);
 </script>
 
@@ -196,14 +205,20 @@
 		{:else}
 			<div class="photo-list">
 				{#each untaggedPhotos as photo (photo.id)}
-					<button
+					<!-- svelte-ignore a11y_click_events_have_key_events -->
+					<div
 						class="photo-card"
 						class:selected={selectedIds.has(photo.id)}
 						onclick={() => toggleSelect(photo.id)}
+						role="button"
+						tabindex="0"
 					>
 						<img src={photo.thumbnail} alt={photo.filename} loading="lazy" />
+						<button class="preview-icon" onclick={(e) => openPreview(e, photo)} aria-label="Preview {photo.filename}">
+							&#128269;
+						</button>
 						<span class="photo-label">{photo.species || photo.filename}</span>
-					</button>
+					</div>
 				{/each}
 			</div>
 		{/if}
@@ -254,6 +269,16 @@
 		{/if}
 	</div>
 </div>
+
+{#if previewPhoto}
+	<AdminPhotoLightbox
+		photo={previewPhoto}
+		photos={untaggedPhotos}
+		{collectionSlug}
+		onclose={() => previewPhoto = null}
+		ondeleted={(id) => { untaggedPhotos = untaggedPhotos.filter(p => p.id !== id); previewPhoto = null; }}
+	/>
+{/if}
 
 <style>
 	.geotagger {
@@ -314,6 +339,7 @@
 		flex: 1;
 	}
 	.photo-card {
+		position: relative;
 		display: flex;
 		align-items: center;
 		gap: 10px;
@@ -339,6 +365,32 @@
 		object-fit: cover;
 		border-radius: 4px;
 		flex-shrink: 0;
+	}
+	.preview-icon {
+		position: absolute;
+		top: 4px;
+		right: 4px;
+		background: rgba(0, 0, 0, 0.5);
+		border: none;
+		color: #fff;
+		font-size: 0.7rem;
+		width: 22px;
+		height: 22px;
+		border-radius: 3px;
+		cursor: pointer;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		opacity: 0;
+		transition: opacity 0.15s;
+		padding: 0;
+		line-height: 1;
+	}
+	.photo-card:hover .preview-icon {
+		opacity: 1;
+	}
+	.preview-icon:hover {
+		background: rgba(0, 0, 0, 0.8);
 	}
 	.photo-label {
 		font-size: 0.8rem;
