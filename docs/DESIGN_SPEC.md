@@ -40,7 +40,7 @@ interface Photo {
   tags: string[];          // ["northern-lights", "tromso"]
   favorite: boolean;
   gps: { lat: number; lng: number } | null;
-  gpsSource: "exif" | "manual" | null;  // null = untagged
+  gpsSource: "exif" | "manual" | "ai" | "itinerary" | null;  // null = untagged
   date: string | null;     // ISO 8601 from EXIF
   camera: string | null;   // "Panasonic DC-GH5"
   lens: string | null;
