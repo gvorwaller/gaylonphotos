@@ -8,7 +8,8 @@
     "build": "vite build",
     "check": "svelte-kit sync && svelte-check --tsconfig ./.svelte-kit/tsconfig.json",
     "preview": "vite preview",
-    "start": "node build/index.js"
+    "start": "node build/index.js",
+    "run": "node scripts/run.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
