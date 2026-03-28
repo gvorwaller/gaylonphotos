@@ -203,6 +203,8 @@ Runtime:     Single app process while JSON files are the persistence layer
 The `gpsSource` field tracks where GPS came from:
 - `"exif"` — extracted from photo EXIF data
 - `"manual"` — assigned via the geo-tagging UI
+- `"ai"` — estimated by AI geocoding (Google Geocoding API for ancestry places)
+- `"itinerary"` — inferred from matching photo date to active itinerary stop
 - `null` — no GPS assigned yet (shows as "untagged" in admin)
 
 ### Sidecar File Format (for bulk import)
@@ -236,13 +238,24 @@ yoursite.com/admin/[collection]/itinerary        # Itinerary editor (travel only
 
 ---
 
-## Future Ideas (Not MVP)
-- Video clip support
+## Implemented Beyond MVP
+- **Batch drag-and-drop upload** — multi-file upload in admin UI
+- **Reverse geocoding** — auto-fill city/country from GPS coords (Google Geocoding API)
+- **AI geocoding** — estimate lat/lng for ancestry places via Google Geocoding API
+- **Family-context ancestry estimation** — infer coordinates from family members' known locations
+- **Itinerary-based GPS** — assign coordinates to unlocated travel photos by matching dates to stops
+- **GEDCOM import/merge** — import family history from GEDCOM files with diff preview
+- **Bird species auto-ID** — Gemini 2.0 Flash vision identifies species from photos
+- **Admin photo lightbox** — full-size preview with EXIF sidebar on admin & geotag pages
+- **Collection sync** — bidirectional dev↔prod JSON sync with timestamp safety
+- **Duplicate detection** (planned) — dHash perceptual hashing for near-duplicate detection
+
+## Future Ideas
+- Video clip support (short clips, 1 min max)
 - Weather data overlay (what was the weather that day?)
 - Trip statistics (km traveled, countries visited, photos per day)
 - Guest comments / guestbook
 - Print-quality export
 - eBird integration for bird sightings
 - Surf forecast data overlay (swell, wind, tide)
-- Batch photo upload via drag-and-drop
-- Reverse geocoding (auto-fill city/country from GPS coords)
+- Family tree visualization display

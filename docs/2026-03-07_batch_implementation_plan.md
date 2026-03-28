@@ -3,7 +3,7 @@
 ## Context
 Open td tasks spanning bug fixes, UX improvements, and new features. Organized into phases by dependency and complexity — quick fixes first, then progressively larger changes. Each phase can be committed and deployed independently.
 
-**Last updated:** 2026-03-21
+**Last updated:** 2026-03-28
 
 ---
 
@@ -11,7 +11,7 @@ Open td tasks spanning bug fixes, UX improvements, and new features. Organized i
 
 - ~~1a. Admin photo thumbnails (td-75d4a3)~~ — object-fit: contain
 - ~~1b. Bird species in photo detail (td-96f8b8)~~ — already working, verified
-- **1c. Fix ancestry husband/wife swap (td-7c2fdc, td-8118e1)** — STILL OPEN, moved to Phase 2
+- ~~1c. Fix ancestry husband/wife swap (td-7c2fdc, td-8118e1)~~ — fixed in Phase 2B
 - ~~1d. Sort photos by date (td-b5a684)~~ — date sort in public + admin pages
 - ~~td-6189db Species in lightbox~~ — added to Lightbox.svelte
 
@@ -110,6 +110,29 @@ Open td tasks spanning bug fixes, UX improvements, and new features. Organized i
 
 ---
 
+## ~~Phase 5B: Admin Tooling & Location Backfill~~ DONE (2026-03-28)
+*Scripts and admin UX improvements for managing photo data.*
+
+### ~~5B-a. Itinerary-based GPS assignment (td-51e76b)~~ DONE
+- `scripts/itinerary-locate.js` — matches photo dates to active itinerary stops
+- Assigns `gpsSource: 'itinerary'`, `locationName: "City, Country"`
+- Supports `--prod` (API writes) and `--dry-run` flags
+- Scandinavia results: 93/101 local, 121/130 prod photos matched
+
+### ~~5B-b. Collection sync (td-22b047)~~ DONE
+- `scripts/sync-collection.sh` — bidirectional JSON sync (dev↔prod)
+- Compares timestamps, skips if destination newer (unless `--force`)
+- Supports `photos`, `itinerary`, `ancestry`, or `all` file types
+
+### ~~5B-c. Admin photo lightbox (td-27d5da + untracked)~~ DONE
+- `AdminPhotoLightbox.svelte` — full-screen overlay with EXIF sidebar
+- Works on admin collection pages (thumbnail click) and geotag pages (magnifying glass icon)
+- Shows date, camera, lens, exposure, location, species, description
+- Admin actions: "Geo-tag" link, "Delete" button with Modal confirmation
+- Prev/next navigation via arrow keys
+
+---
+
 ## Phase 6: Ancestry Polish (P3)
 *Visual refinements to the ancestry/family heritage display.*
 
@@ -133,35 +156,19 @@ Open td tasks spanning bug fixes, UX improvements, and new features. Organized i
 ### 7c. User help in hamburger menu (td-41b18a)
 **Description:** Add a help/info section accessible from the hamburger navigation menu.
 
+### 7d. Multi-user family history (td-a8c913)
+**Description:** Make the family history part multi-user (separate GEDCOM files per user).
+
 ---
 
-## Phase 8: GEDCOM Re-Import Merge (P1)
+## ~~Phase 8: GEDCOM Re-Import Merge (P1)~~ DONE (closed 2026-03-22)
 *Smart re-import from FamilyTree 11 with diff preview and app-side override protection.*
 *Design doc: `docs/2026-03-21_gedcom-reimport-merge-design.md`*
 
-### 8a. Override tracking (td-8dfca1, Phase A)
-- Add `appOverrides` object to person records for tracking manual edits
-- Person edit UI in admin ancestry page (name, dates, places, facts)
-- Extend PATCH endpoint for person-level field edits
-- Visual indicators (pencil icon) on overridden fields
-
-### 8b. Diff engine (td-8dfca1, Phase B)
-- `diffAncestry()` function: match by fsId → xref → name+year
-- Produce structured diff with field-level old/new values
-- Auto-reject changes to override-protected fields
-- Detect added/removed persons
-
-### 8c. Preview UI (td-8dfca1, Phase C)
-- "Re-Import" tab in admin ancestry page
-- Upload GEDCOM → diff summary (changed/added/removed/protected counts)
-- Expandable per-person field-level diff with accept/reject toggles
-- Bulk actions: "Accept All Unprotected" / "Reject All"
-
-### 8d. Apply merge (td-8dfca1, Phase D)
-- Apply accepted changes, preserve GPS/geocode data and app overrides
-- Recompute generation/lineage from updated tree structure
-- Rebuild places array, update mergeHistory
-- Confirmation modal with summary before applying
+### ~~8a. Override tracking (td-8dfca1, Phase A)~~ DONE
+### ~~8b. Diff engine (td-8dfca1, Phase B)~~ DONE
+### ~~8c. Preview UI (td-8dfca1, Phase C)~~ DONE
+### ~~8d. Apply merge (td-8dfca1, Phase D)~~ DONE
 
 ---
 
@@ -193,9 +200,9 @@ Open td tasks spanning bug fixes, UX improvements, and new features. Organized i
 | ~~td-c71ffe Gemini 2.0 Flash~~ | **DONE** | Closed |
 | ~~td-0a402a Family locations~~ | **DONE** | Closed (superseded by AI geocoding) |
 | ~~td-2f97fe Switch geocoding to Google~~ | **DONE** | Closed |
-| td-8aa049 All event places per person | **REVIEW** | All person.facts[] places shown in panel + search (2026-03-19) |
-| td-2c4fef Show all ancestry locations | **REVIEW** | Same fix as td-8aa049 (2026-03-19) |
-| td-fa3441 Itinerary polyline | **REVIEW** | Fixed $effect dep tracking — read both map+polyline upfront (2026-03-19) |
+| ~~td-8aa049 All event places per person~~ | **DONE** | All person.facts[] places shown in panel + search (2026-03-19) |
+| ~~td-2c4fef Show all ancestry locations~~ | **DONE** | Same fix as td-8aa049 (2026-03-19) |
+| ~~td-fa3441 Itinerary polyline~~ | **DONE** | Fixed $effect dep tracking — read both map+polyline upfront (2026-03-19) |
 | ~~td-286da1 Batch delete UI~~ | **DONE** | Select mode, checkboxes, confirm modal, sequential delete (2026-03-20) |
 | ~~td-2d7177 Global ancestor name search~~ | **DONE** | In View/All toggle, zoom-to-person buttons, map pans (2026-03-20) |
 | ~~td-e259fc Map marker photo preview~~ | **DONE** | InfoWindow with thumbnail on marker click for birds/surfing (2026-03-21) |
@@ -205,13 +212,16 @@ Open td tasks spanning bug fixes, UX improvements, and new features. Organized i
 | ~~td-36e3e0 Photo counter in detail~~ | **DONE** | "X of N" pill in Lightbox + PhotoDetail (2026-03-21) |
 | ~~td-d6b1c7 Swipe through photos~~ | **DONE** | Arrow keys, touch swipe, trackpad swipe in both views (2026-03-21) |
 | ~~td-cd6075 Photo detail jump to map~~ | **DONE** | "Show on Map" link with ?mapLat/mapLng params (2026-03-21) |
-| td-8dfca1 GEDCOM re-import merge | Open | Smart diff/preview/apply with override protection (P1) |
+| ~~td-8dfca1 GEDCOM re-import merge~~ | **DONE** | Smart diff/preview/apply with override protection (closed 2026-03-22) |
 | td-86a93f New collection smoke test | Open | Add new collection end-to-end (P3) |
 | td-20ed38 Ancestry gaylon/madonna tags | Open | Color-code names in By Generation tab (P3) |
 | td-3573e3 Admin ancestry real names | Open | Show Gaylon's/Madonna's in admin (P3) |
 | td-3b705b AI location recognition | Open | Gemini vision for photos without GPS (P3) |
 | td-0a826d Video support | Open | Video uploads + playback (P3) |
 | td-41b18a User help in menu | Open | Help section in hamburger nav (P3) |
+| ~~td-51e76b Itinerary-based GPS~~ | **DONE** | Assign GPS to unlocated photos from itinerary stops (2026-03-28) |
+| ~~td-22b047 Collection sync~~ | **DONE** | Bidirectional dev↔prod JSON sync script (2026-03-28) |
+| ~~td-27d5da Admin photo lightbox~~ | **DONE** | Large preview + EXIF sidebar on admin & geotag pages (2026-03-28) |
 
 ---
 
@@ -258,12 +268,10 @@ Phase 6 verification:
 - By Generation tab → ancestor names color-coded by gaylon/madonna lineage
 - Admin ancestry editor → shows "Gaylon's" / "Madonna's" instead of "Wife-Paternal"
 
-Phase 8 verification:
-- Admin → Ancestry → edit a person's name → appOverrides recorded
-- Admin → Ancestry → Re-Import tab → upload new GEDCOM → diff preview shown
-- Changed persons → expand → field-level diff with accept/reject toggles
-- Override-protected fields auto-rejected with lock icon
-- Apply → changes saved, GPS preserved, overrides survive
+~~Phase 8 verification~~ PASSED:
+- ~~Admin → Ancestry → edit a person's name → appOverrides recorded~~
+- ~~Admin → Ancestry → Re-Import tab → upload new GEDCOM → diff preview shown~~
+- ~~Admin → Ancestry → apply merge → changes saved, GPS preserved, overrides survive~~
 
 Phase 9 verification:
 - Admin → Collections → create new "floating cottage" collection (type: action)
