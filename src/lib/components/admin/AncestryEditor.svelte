@@ -14,6 +14,18 @@
 	let localAncestry = $state(null);
 	let loaded = $state(false);
 
+	let primaryFirst = $derived(localAncestry?.meta?.rootPersonNames?.[0]?.split(' ')[0] || '');
+	let wifeFirst = $derived(localAncestry?.meta?.rootPersonNames?.[1]?.split(' ')[0] || '');
+
+	function displayLineage(lineage) {
+		if (!lineage) return '';
+		const isWife = lineage.startsWith('wife-');
+		const base = isWife ? lineage.slice(5) : lineage;
+		const owner = isWife ? wifeFirst : primaryFirst;
+		const label = base.charAt(0).toUpperCase() + base.slice(1);
+		return owner ? `${owner}'s ${label}` : label;
+	}
+
 	function readFileAsText(file) {
 		return new Promise((resolve, reject) => {
 			const reader = new FileReader();
@@ -716,7 +728,7 @@
 							{person.birthYear ?? '?'}–{person.deathYear ?? '?'}
 						</span>
 						<span class="person-gen">Gen {person.generation}</span>
-						<span class="person-lineage">{person.lineage}</span>
+						<span class="person-lineage">{displayLineage(person.lineage)}</span>
 						{#if person.fsId}
 							<a href="https://www.familysearch.org/tree/person/details/{person.fsId}" target="_blank" rel="noopener" class="fs-link">FS</a>
 						{/if}
