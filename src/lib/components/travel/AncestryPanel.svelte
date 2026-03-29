@@ -506,6 +506,7 @@
 											{#each group.persons as person (person.id)}
 												<div class="generation-person">
 													<div class="generation-person-header">
+														<span class="line-dot" style="background: {person.lineage?.startsWith('wife-') ? '#d946ef' : '#6366f1'};"></span>
 														<button class="person-link" onclick={() => togglePerson(person.id)}>
 															{person.name}
 														</button>
