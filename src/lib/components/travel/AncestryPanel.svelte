@@ -9,6 +9,7 @@
 	 *   mapBounds — { north, south, east, west } from ItineraryMap onboundschange
 	 */
 	import { slide } from 'svelte/transition';
+	import PedigreeTree from './PedigreeTree.svelte';
 
 	let { ancestry = { persons: [], places: [] }, collectionSlug = '', mapBounds = null, ongotolocation = null } = $props();
 
@@ -17,6 +18,56 @@
 	let expandedPersonId = $state(null);
 	let ancestorSearch = $state('');
 	let searchGlobal = $state(false);
+
+	// ─── Tree tab state ─────────────────────────────
+	let treeRoot = $state('primary');
+	let treeMaxGen = $state(5);
+
+	let primaryTreePersons = $derived(
+		(ancestry?.persons || []).filter((p) => !p.lineage?.startsWith('wife-'))
+	);
+	let wifeTreePersons = $derived(
+		(ancestry?.persons || []).filter((p) => p.lineage?.startsWith('wife-'))
+	);
+	let treePersons = $derived(treeRoot === 'wife' ? wifeTreePersons : primaryTreePersons);
+	let treeActualMaxGen = $derived(
+		treePersons.length ? Math.max(...treePersons.map((p) => p.generation)) : 0
+	);
+	let treeMaxGenLabel = $derived(generationLabel(treeMaxGen));
+
+	// Clamp treeMaxGen when switching roots
+	$effect(() => {
+		if (treeMaxGen > treeActualMaxGen && treeActualMaxGen > 0) {
+			treeMaxGen = treeActualMaxGen;
+		}
+	});
+
+	// Tree viewport IDs: when no mapBounds, treat all tree persons as visible
+	let treeVisibleIds = $derived.by(() => {
+		if (!mapBounds) return new Set(treePersons.map((p) => p.id));
+		const ids = new Set();
+		for (const p of treePersons) {
+			if (visiblePersonIds.has(p.id)) ids.add(p.id);
+		}
+		return ids;
+	});
+
+	// Tree persons with known map locations
+	let treeLocatedIds = $derived.by(() => {
+		const ids = new Set();
+		for (const p of treePersons) {
+			if (findPersonLocation(p)) ids.add(p.id);
+		}
+		return ids;
+	});
+
+	// Auto-scroll detail card into view when selected on tree tab
+	let treeDetailRef = $state(null);
+	$effect(() => {
+		if (activeTab === 'tree' && expandedPersonId && treeDetailRef) {
+			treeDetailRef.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+		}
+	});
 
 	// ─── Map-viewport filtering ─────────────────────────────
 	let visiblePlaces = $derived.by(() => {
@@ -290,6 +341,11 @@
 					class:active={activeTab === 'generation'}
 					onclick={() => (activeTab = 'generation')}
 				>By Generation</button>
+				<button
+					class="ancestry-tab"
+					class:active={activeTab === 'tree'}
+					onclick={() => (activeTab = 'tree')}
+				>Family Tree</button>
 			</div>
 
 			<!-- Search -->
@@ -320,7 +376,7 @@
 			</div>
 
 			<!-- Tab content -->
-			<div class="ancestry-content">
+			<div class="ancestry-content" class:tree-active={activeTab === 'tree'}>
 				{#if activeTab === 'place'}
 					{#if placesSorted.length === 0}
 						<p class="ancestry-empty">No ancestors in the current map view — zoom out or pan to see more.</p>
@@ -475,6 +531,38 @@
 									{/if}
 								</div>
 							{/each}
+						</div>
+					{/if}
+				{:else if activeTab === 'tree'}
+					<div class="tree-controls">
+						{#if hasWifeLines}
+							<div class="tree-toggle">
+								<button class="scope-btn" class:active={treeRoot === 'primary'}
+									onclick={() => (treeRoot = 'primary')}>{primaryName || 'Primary'}'s Tree</button>
+								<button class="scope-btn" class:active={treeRoot === 'wife'}
+									onclick={() => (treeRoot = 'wife')}>{mergedName || 'Spouse'}'s Tree</button>
+							</div>
+						{/if}
+						<label class="gen-slider-label">
+							Depth: {treeMaxGen} &mdash; {treeMaxGenLabel}
+							<input type="range" class="gen-slider" min={3} max={treeActualMaxGen} bind:value={treeMaxGen} />
+						</label>
+					</div>
+					<PedigreeTree
+						persons={treePersons}
+						maxGen={treeMaxGen}
+						selectedId={expandedPersonId}
+						searchQuery={ancestorSearch}
+						{searchGlobal}
+						visibleIds={treeVisibleIds}
+						locatedIds={treeLocatedIds}
+						selectedRoot={treeRoot}
+						onselect={(id) => togglePerson(id)}
+						ongoto={(person) => gotoPersonLocation(person)}
+					/>
+					{#if expandedPersonId && personMap.get(expandedPersonId)}
+						<div class="tree-detail-anchor" bind:this={treeDetailRef}>
+							{@render personDetails(personMap.get(expandedPersonId))}
 						</div>
 					{/if}
 				{/if}
@@ -633,6 +721,12 @@
 		gap: 0;
 		border-bottom: 1px solid var(--color-border);
 		padding: 0 20px;
+		overflow-x: auto;
+		-webkit-overflow-scrolling: touch;
+		scrollbar-width: none;
+	}
+	.ancestry-tabs::-webkit-scrollbar {
+		display: none;
 	}
 	.ancestry-tab {
 		padding: 10px 16px;
@@ -645,6 +739,13 @@
 		color: var(--color-text-muted);
 		cursor: pointer;
 		transition: color 0.15s, border-color 0.15s;
+		white-space: nowrap;
+	}
+	@media (max-width: 480px) {
+		.ancestry-tab {
+			padding: 10px 10px;
+			font-size: 0.75rem;
+		}
 	}
 	.ancestry-tab:hover {
 		color: var(--color-text);
@@ -1030,6 +1131,49 @@
 		font-size: 0.75rem;
 		color: var(--color-text-muted);
 		margin-top: 2px;
+	}
+
+	/* ─── Family Tree Tab ────────────────────────── */
+	.ancestry-content.tree-active {
+		max-height: none;
+		overflow: visible;
+	}
+	.tree-controls {
+		display: flex;
+		align-items: center;
+		gap: 16px;
+		margin-bottom: 12px;
+		flex-wrap: wrap;
+	}
+	.tree-toggle {
+		display: flex;
+		gap: 0;
+		flex-shrink: 0;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		overflow: hidden;
+	}
+	.gen-slider-label {
+		font-size: 0.8rem;
+		color: var(--color-text-muted);
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		white-space: nowrap;
+	}
+	.gen-slider {
+		width: 120px;
+		accent-color: var(--color-primary);
+	}
+	.tree-detail-anchor {
+		margin-top: 8px;
+	}
+	@media (max-width: 640px) {
+		.tree-controls {
+			flex-direction: column;
+			align-items: flex-start;
+			gap: 8px;
+		}
 	}
 
 	/* ─── Footer ─────────────────────────────────── */
