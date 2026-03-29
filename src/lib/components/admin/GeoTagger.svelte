@@ -14,14 +14,17 @@
 	let { collectionSlug, photos = [], allPhotos = [], apiKey = '' } = $props();
 
 	// Working copies — photos move from untagged to tagged as they're assigned
+	let localAllPhotos = $state([]);
 	let untaggedPhotos = $state([]);
 	let selectedIds = $state(new Set());
 	let pendingCoords = $state(null);
 	let assigning = $state(false);
 	let error = $state('');
+	let clearingGps = $state(false);
 
 	// Re-sync when navigating to a different collection's geotag page
 	$effect(() => {
+		localAllPhotos = [...allPhotos];
 		untaggedPhotos = [...photos];
 		selectedIds = new Set();
 		pendingCoords = null;
@@ -72,7 +75,7 @@
 		const m = [];
 
 		// Already-tagged photos from the full collection
-		for (const p of allPhotos) {
+		for (const p of localAllPhotos) {
 			if (p.gps && p.gpsSource !== null) {
 				m.push({
 					lat: p.gps.lat,
@@ -180,6 +183,52 @@
 		previewPhoto = photo;
 	}
 	let canAssign = $derived(selectedCount > 0 && pendingCoords !== null);
+
+	// ─── Marker click: show tagged photo with option to clear GPS ───
+	function handleMarkerClick({ id }) {
+		if (id === '__pending__') return null;
+		const photo = localAllPhotos.find((p) => p.id === id);
+		if (!photo) return null;
+		const src = photo.thumbnail || '';
+		const name = photo.filename || photo.id;
+		const source = photo.gpsSource || 'unknown';
+		return {
+			content: `<div style="text-align:center;max-width:240px;">
+				<img src="${src}" alt="${name}" style="width:200px;height:auto;border-radius:4px;" />
+				<div style="margin:6px 0 4px;font-size:12px;font-weight:600;">${name}</div>
+				<div style="font-size:11px;color:#6c757d;margin-bottom:6px;">Source: ${source}</div>
+				<button onclick="window.__clearGeotagGps__('${id}')" style="background:#dc3545;color:#fff;border:none;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600;">Clear GPS</button>
+			</div>`,
+			zoomLevel: null
+		};
+	}
+
+	// Global callback for InfoWindow button (InfoWindow content is raw HTML)
+	if (typeof window !== 'undefined') {
+		window.__clearGeotagGps__ = async (photoId) => {
+			if (clearingGps) return;
+			clearingGps = true;
+			const result = await apiPut('/api/photos', {
+				collection: collectionSlug,
+				photoId,
+				updates: { gps: null, gpsSource: null, locationName: null }
+			});
+			clearingGps = false;
+			if (result.ok) {
+				// Move photo from tagged to untagged
+				const photo = localAllPhotos.find((p) => p.id === photoId);
+				if (photo) {
+					photo.gps = null;
+					photo.gpsSource = null;
+					photo.locationName = null;
+					localAllPhotos = [...localAllPhotos];
+					untaggedPhotos = [...untaggedPhotos, photo];
+				}
+			} else {
+				error = result.error || 'Failed to clear GPS';
+			}
+		};
+	}
 </script>
 
 <div class="geotagger">
@@ -240,7 +289,9 @@
 				zoom={3}
 				markers={markers}
 				clickable={true}
+				infoWindowEnabled={true}
 				onmapclick={handleMapClick}
+				onmarkerclick={handleMarkerClick}
 				onmapready={handleMapReady}
 			/>
 		</div>
