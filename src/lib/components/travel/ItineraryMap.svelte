@@ -58,7 +58,7 @@
 					name = `<a href="https://www.familysearch.org/tree/person/details/${encodeURIComponent(person.fsId)}" target="_blank" rel="noopener" style="color:#28a745;text-decoration:none;">${name}</a>`;
 				}
 				const lineageLabel = person?.lineage?.startsWith('wife-') ? mergedName : primaryName;
-				const lineageBadge = lineageLabel ? ` <span style="font-size:10px;color:#fff;background:${person?.lineage?.startsWith('wife-') ? '#6366f1' : '#d946ef'};padding:0 4px;border-radius:3px;vertical-align:middle;">${esc(lineageLabel)}</span>` : '';
+				const lineageBadge = lineageLabel ? ` <span style="font-size:10px;color:#fff;background:${person?.lineage?.startsWith('wife-') ? '#d946ef' : '#6366f1'};padding:0 4px;border-radius:3px;vertical-align:middle;">${esc(lineageLabel)}</span>` : '';
 				html += `<div style="margin-bottom:3px;">${icon} <strong>${name}</strong>${lineageBadge} &mdash; ${esc(evt.type)}${evt.year ? ', ' + esc(String(evt.year)) : ''}</div>`;
 			}
 			if (events.length > 8) {

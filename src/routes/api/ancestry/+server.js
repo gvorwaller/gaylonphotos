@@ -44,7 +44,7 @@ export async function POST({ request }) {
 	const merge = formData.get('merge') === 'true';
 	const lineagePrefix = formData.get('lineagePrefix') || 'wife';
 
-	// Only "wife" is currently supported — frontend By Family Line tab hardcodes wife-* columns
+	// Only "wife" is supported — the merged/second root is the wife, primary/first root is the husband
 	if (merge && lineagePrefix !== 'wife') {
 		return json({ error: 'lineagePrefix must be "wife" (only supported value currently)' }, { status: 400 });
 	}
