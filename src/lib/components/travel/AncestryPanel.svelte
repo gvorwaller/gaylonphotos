@@ -304,6 +304,12 @@
 			ongotolocation({ lat: loc.lat, lng: loc.lng, zoom: 11, _ts: Date.now() });
 		}
 	}
+
+	function gotoPlaceLocation(place) {
+		if (place.lat != null && place.lng != null && ongotolocation) {
+			ongotolocation({ lat: place.lat, lng: place.lng, zoom: 12, _ts: Date.now() });
+		}
+	}
 </script>
 
 <div class="ancestry-panel">
@@ -392,6 +398,9 @@
 											{/if}
 											{#if place.nearStop}
 												<span class="visited-badge">Visited</span>
+											{/if}
+											{#if place.lat != null && place.lng != null}
+												<button class="place-map-btn" onclick={() => gotoPlaceLocation(place)} title="Center map on this place">&#x1F4CD;</button>
 											{/if}
 										</span>
 									</div>
@@ -878,6 +887,25 @@
 		border-radius: var(--radius-pill);
 		background: var(--badge-travel-bg);
 		color: var(--badge-travel-text);
+	}
+	.place-map-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 44px;
+		min-height: 44px;
+		background: #e8f5e9;
+		border: 1px solid #a5d6a7;
+		border-radius: 4px;
+		font-size: 1rem;
+		cursor: pointer;
+		color: #388e3c;
+		transition: background 0.1s, border-color 0.1s;
+		flex-shrink: 0;
+	}
+	.place-map-btn:hover {
+		background: #c8e6c9;
+		border-color: #66bb6a;
 	}
 	.place-events {
 		list-style: none;
