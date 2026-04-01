@@ -248,6 +248,18 @@
 				strokeColor: '#28a745',
 				strokeOpacity: 0.8,
 				strokeWeight: 3,
+				icons: [{
+					icon: {
+						path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
+						scale: 3,
+						strokeColor: '#28a745',
+						strokeOpacity: 1,
+						fillColor: '#28a745',
+						fillOpacity: 0.8
+					},
+					offset: '50%',
+					repeat: '90px'
+				}],
 				map: currentMap
 			});
 		}
