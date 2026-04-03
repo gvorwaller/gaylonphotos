@@ -33,9 +33,11 @@ const THUMB_WIDTH = 400;
 const DISPLAY_WIDTH = 1600;
 const DATA_DIR = 'data';
 
-const SUPPORTED_EXTENSIONS = new Set([
+const IMAGE_EXTENSIONS = new Set([
 	'.jpg', '.jpeg', '.png', '.webp', '.heic', '.heif', '.tif', '.tiff'
 ]);
+const VIDEO_EXTENSIONS = new Set(['.mp4', '.mov', '.m4v']);
+const SUPPORTED_EXTENSIONS = new Set([...IMAGE_EXTENSIONS, ...VIDEO_EXTENSIONS]);
 
 // ── Environment ─────────────────────────────────────────────────────
 
@@ -219,6 +221,9 @@ async function readTakeoutSidecar(photoPath) {
 // ── Photo ID Generation ─────────────────────────────────────────────
 
 import { randomBytes } from 'node:crypto';
+import { extractVideoMetadata, extractVideoThumbnail, normalizeVideo, isWebFriendly } from '../src/lib/server/video.js';
+import { tmpdir } from 'node:os';
+import { unlink } from 'node:fs/promises';
 
 // Lazy-loaded only when --species flag is used
 let identifySpeciesFromBuffer = null;
@@ -278,20 +283,22 @@ async function ingest(collectionSlug, sourceDir, autoSpecies = false) {
 	const existingIds = new Set(photosData.photos.map((p) => p.id));
 	const existingFilenames = new Set(photosData.photos.map((p) => p.filename));
 
-	// List all image files in source directory (non-recursive)
+	// List all media files in source directory (non-recursive)
 	const entries = await readdir(sourceDir);
-	const imageFiles = entries.filter((f) => {
+	const mediaFiles = entries.filter((f) => {
 		const ext = extname(f).toLowerCase();
 		return SUPPORTED_EXTENSIONS.has(ext);
 	});
 
-	console.log(`Found ${imageFiles.length} image files`);
+	const imageCount = mediaFiles.filter((f) => IMAGE_EXTENSIONS.has(extname(f).toLowerCase())).length;
+	const videoCount = mediaFiles.filter((f) => VIDEO_EXTENSIONS.has(extname(f).toLowerCase())).length;
+	console.log(`Found ${mediaFiles.length} media files (${imageCount} images, ${videoCount} videos)`);
 
 	let ingested = 0;
 	let skipped = 0;
 	let failed = 0;
 
-	for (const filename of imageFiles) {
+	for (const filename of mediaFiles) {
 		// Skip already-ingested files
 		if (existingFilenames.has(filename)) {
 			console.log(`  SKIP (already ingested): ${filename}`);
@@ -300,102 +307,166 @@ async function ingest(collectionSlug, sourceDir, autoSpecies = false) {
 		}
 
 		const filePath = join(sourceDir, filename);
+		const ext = extname(filename).toLowerCase();
+		const isVideo = VIDEO_EXTENSIONS.has(ext);
 
 		try {
-			console.log(`  Processing: ${filename}`);
+			console.log(`  Processing${isVideo ? ' (video)' : ''}: ${filename}`);
 
-			// Read file
-			const fileBuffer = await readFile(filePath);
+			if (isVideo) {
+				// ── Video ingest path ──
+				const meta = await extractVideoMetadata(filePath);
+				const { posterBuffer, thumbBuffer } = await extractVideoThumbnail(filePath);
 
-			// Extract EXIF
-			const exifData = await extractExif(fileBuffer);
-
-			// Read Google Takeout sidecar for fallback metadata
-			const sidecar = await readTakeoutSidecar(filePath);
-
-			// Merge: EXIF takes priority, sidecar fills gaps
-			const metadata = { ...emptyExif(), ...exifData };
-			if (sidecar) {
-				if (!metadata.gps && sidecar.gps) {
-					metadata.gps = sidecar.gps;
-					metadata.gpsSource = sidecar.gpsSource || 'manual';
+				// Normalize to H.264 MP4
+				let normalizedPath = null;
+				let videoBuffer;
+				try {
+					normalizedPath = await normalizeVideo(filePath, meta);
+					videoBuffer = await readFile(normalizedPath);
+				} finally {
+					if (normalizedPath) await unlink(normalizedPath).catch(() => {});
 				}
-				if (!metadata.date && sidecar.date) {
-					metadata.date = sidecar.date;
+
+				const id = derivePhotoId(filename, existingIds);
+				existingIds.add(id);
+
+				// Upload video, poster, and thumbnail
+				const videoKey = `${collectionSlug}/${id}.mp4`;
+				const posterKey = `${collectionSlug}/${id}.jpg`;
+				const thumbKey = `${collectionSlug}/thumbs/${id}.jpg`;
+
+				const [videoUrl, posterUrl, thumbUrl] = await Promise.all([
+					uploadBuffer(videoKey, videoBuffer, 'video/mp4'),
+					uploadBuffer(posterKey, posterBuffer, 'image/jpeg'),
+					uploadBuffer(thumbKey, thumbBuffer, 'image/jpeg')
+				]);
+
+				const record = {
+					id,
+					type: 'video',
+					filename,
+					url: posterUrl,
+					videoUrl,
+					thumbnail: thumbUrl,
+					duration: meta.duration,
+					description: '',
+					tags: [],
+					favorite: false,
+					gps: null,
+					gpsSource: null,
+					date: null,
+					camera: null,
+					lens: null,
+					focalLength: null,
+					iso: null,
+					aperture: null,
+					shutterSpeed: null
+				};
+
+				photosData.photos.push(record);
+				existingFilenames.add(filename);
+				ingested++;
+
+				const durLabel = meta.duration ? `${Math.floor(meta.duration / 60)}:${String(meta.duration % 60).padStart(2, '0')}` : '?';
+				console.log(`    ✓ ${id} | Video ${durLabel} | ${meta.width}x${meta.height}`);
+
+			} else {
+				// ── Image ingest path ──
+
+				// Read file
+				const fileBuffer = await readFile(filePath);
+
+				// Extract EXIF
+				const exifData = await extractExif(fileBuffer);
+
+				// Read Google Takeout sidecar for fallback metadata
+				const sidecar = await readTakeoutSidecar(filePath);
+
+				// Merge: EXIF takes priority, sidecar fills gaps
+				const metadata = { ...emptyExif(), ...exifData };
+				if (sidecar) {
+					if (!metadata.gps && sidecar.gps) {
+						metadata.gps = sidecar.gps;
+						metadata.gpsSource = sidecar.gpsSource || 'manual';
+					}
+					if (!metadata.date && sidecar.date) {
+						metadata.date = sidecar.date;
+					}
 				}
+
+				// Generate photo ID
+				const id = derivePhotoId(filename, existingIds);
+				existingIds.add(id);
+				const jpgFilename = `${id}.jpg`;
+
+				// Resize to display + thumbnail
+				const [displayBuffer, thumbBuffer] = await Promise.all([
+					sharp(fileBuffer)
+						.rotate() // auto-rotate based on EXIF orientation
+						.resize(DISPLAY_WIDTH, null, { withoutEnlargement: true })
+						.jpeg({ quality: 85 })
+						.toBuffer(),
+					sharp(fileBuffer)
+						.rotate() // auto-rotate based on EXIF orientation
+						.resize(THUMB_WIDTH, null, { withoutEnlargement: true })
+						.jpeg({ quality: 80 })
+						.toBuffer()
+				]);
+
+				// Upload to Spaces
+				const displayKey = `${collectionSlug}/${jpgFilename}`;
+				const thumbKey = `${collectionSlug}/thumbs/${jpgFilename}`;
+
+				const [displayUrl, thumbUrl] = await Promise.all([
+					uploadBuffer(displayKey, displayBuffer, 'image/jpeg'),
+					uploadBuffer(thumbKey, thumbBuffer, 'image/jpeg')
+				]);
+
+				// Build photo object — explicitly pick metadata fields
+				const photo = {
+					id,
+					filename,
+					url: displayUrl,
+					thumbnail: thumbUrl,
+					description: sidecar?.description || '',
+					tags: [],
+					favorite: false,
+					gps: metadata.gps,
+					gpsSource: metadata.gpsSource,
+					date: metadata.date,
+					camera: metadata.camera,
+					lens: metadata.lens,
+					focalLength: metadata.focalLength,
+					iso: metadata.iso,
+					aperture: metadata.aperture,
+					shutterSpeed: metadata.shutterSpeed
+				};
+
+				// Auto-identify species if flag is set
+				if (autoSpecies && identifySpeciesFromBuffer) {
+					const identification = await identifySpeciesFromBuffer(displayBuffer);
+					if (identification) {
+						photo.species = identification.species;
+						photo.scientificName = identification.scientificName;
+						photo.speciesAI = {
+							model: speciesModel,
+							confidence: identification.confidence,
+							detectedAt: new Date().toISOString()
+						};
+						console.log(`    Species: ${identification.species} (${identification.confidence})`);
+					} else {
+						console.log(`    Species: could not identify`);
+					}
+				}
+
+				photosData.photos.push(photo);
+				existingFilenames.add(filename);
+				ingested++;
+
+				const gpsLabel = photo.gps ? `GPS: ${photo.gps.lat.toFixed(4)}, ${photo.gps.lng.toFixed(4)}` : 'No GPS';
+				console.log(`    ✓ ${id} | ${gpsLabel} | ${photo.date || 'No date'}`);
 			}
-
-			// Generate photo ID
-			const id = derivePhotoId(filename, existingIds);
-			existingIds.add(id);
-			const jpgFilename = `${id}.jpg`;
-
-			// Resize to display + thumbnail
-			const [displayBuffer, thumbBuffer] = await Promise.all([
-				sharp(fileBuffer)
-					.rotate() // auto-rotate based on EXIF orientation
-					.resize(DISPLAY_WIDTH, null, { withoutEnlargement: true })
-					.jpeg({ quality: 85 })
-					.toBuffer(),
-				sharp(fileBuffer)
-					.rotate() // auto-rotate based on EXIF orientation
-					.resize(THUMB_WIDTH, null, { withoutEnlargement: true })
-					.jpeg({ quality: 80 })
-					.toBuffer()
-			]);
-
-			// Upload to Spaces
-			const displayKey = `${collectionSlug}/${jpgFilename}`;
-			const thumbKey = `${collectionSlug}/thumbs/${jpgFilename}`;
-
-			const [displayUrl, thumbUrl] = await Promise.all([
-				uploadBuffer(displayKey, displayBuffer, 'image/jpeg'),
-				uploadBuffer(thumbKey, thumbBuffer, 'image/jpeg')
-			]);
-
-			// Build photo object — explicitly pick metadata fields
-			const photo = {
-				id,
-				filename,
-				url: displayUrl,
-				thumbnail: thumbUrl,
-				description: sidecar?.description || '',
-				tags: [],
-				favorite: false,
-				gps: metadata.gps,
-				gpsSource: metadata.gpsSource,
-				date: metadata.date,
-				camera: metadata.camera,
-				lens: metadata.lens,
-				focalLength: metadata.focalLength,
-				iso: metadata.iso,
-				aperture: metadata.aperture,
-				shutterSpeed: metadata.shutterSpeed
-			};
-
-			// Auto-identify species if flag is set
-			if (autoSpecies && identifySpeciesFromBuffer) {
-				const identification = await identifySpeciesFromBuffer(displayBuffer);
-				if (identification) {
-					photo.species = identification.species;
-					photo.scientificName = identification.scientificName;
-					photo.speciesAI = {
-						model: speciesModel,
-						confidence: identification.confidence,
-						detectedAt: new Date().toISOString()
-					};
-					console.log(`    Species: ${identification.species} (${identification.confidence})`);
-				} else {
-					console.log(`    Species: could not identify`);
-				}
-			}
-
-			photosData.photos.push(photo);
-			existingFilenames.add(filename);
-			ingested++;
-
-			const gpsLabel = photo.gps ? `GPS: ${photo.gps.lat.toFixed(4)}, ${photo.gps.lng.toFixed(4)}` : 'No GPS';
-			console.log(`    ✓ ${id} | ${gpsLabel} | ${photo.date || 'No date'}`);
 
 		} catch (err) {
 			console.error(`    ✗ FAILED: ${filename} — ${err.message}`);
@@ -414,7 +485,8 @@ async function ingest(collectionSlug, sourceDir, autoSpecies = false) {
 		const speciesCount = photosData.photos.filter((p) => p.species).length;
 		console.log(`  Species:  ${speciesCount} photos with species labels`);
 	}
-	console.log(`  Total:    ${photosData.photos.length} photos in collection\n`);
+	const videoTotal = photosData.photos.filter((p) => p.type === 'video').length;
+	console.log(`  Total:    ${photosData.photos.length} items in collection (${videoTotal} videos)\n`);
 }
 
 // ── CLI Entry ───────────────────────────────────────────────────────

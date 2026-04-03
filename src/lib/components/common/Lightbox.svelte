@@ -25,18 +25,22 @@
 			: currentPhoto
 	);
 
+	let videoEl = $state(null);
+
 	function goPrev() {
+		videoEl?.pause();
 		const idx = navIndex ?? currentIndex;
 		if (idx > 0) navIndex = idx - 1;
 	}
 
 	function goNext() {
+		videoEl?.pause();
 		const idx = navIndex ?? currentIndex;
 		if (idx < photos.length - 1) navIndex = idx + 1;
 	}
 
 	function handleKeydown(e) {
-		if (e.key === 'Escape') onclose?.();
+		if (e.key === 'Escape') { videoEl?.pause(); onclose?.(); return; }
 		if (e.key === 'ArrowLeft') goPrev();
 		if (e.key === 'ArrowRight') goNext();
 	}
@@ -127,13 +131,31 @@
 	{/if}
 
 	<div class="lightbox-content">
-		<img src={displayPhoto.url} alt={displayPhoto.description || displayPhoto.filename} class="lightbox-image" />
+		{#if displayPhoto.type === 'video' && displayPhoto.videoUrl}
+			<!-- svelte-ignore a11y_media_has_caption -->
+			<video
+				bind:this={videoEl}
+				src={displayPhoto.videoUrl}
+				poster={displayPhoto.url}
+				controls
+				playsinline
+				preload="metadata"
+				class="lightbox-image"
+			>
+				Your browser does not support video playback.
+			</video>
+		{:else}
+			<img src={displayPhoto.url} alt={displayPhoto.description || displayPhoto.filename} class="lightbox-image" />
+		{/if}
 
 		<div class="lightbox-info">
 			{#if displayPhoto.description}
 				<p class="lightbox-desc">{displayPhoto.description}</p>
 			{/if}
 			<div class="lightbox-meta">
+				{#if displayPhoto.duration}
+					<span>{Math.floor(displayPhoto.duration / 60)}:{String(displayPhoto.duration % 60).padStart(2, '0')}</span>
+				{/if}
 				{#if displayPhoto.species}
 					<span class="lightbox-species">{displayPhoto.species}</span>
 				{/if}
@@ -230,6 +252,10 @@
 		max-height: 80vh;
 		object-fit: contain;
 		border-radius: 4px;
+	}
+	video.lightbox-image {
+		outline: none;
+		background: #000;
 	}
 	.lightbox-info {
 		color: #ccc;

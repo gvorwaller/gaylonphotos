@@ -68,27 +68,27 @@
 		if (uploading) return;
 		batchError = '';
 
-		const IMAGE_EXTS = /\.(jpe?g|png|webp|heic|heif|tiff?)$/i;
-		const imageFiles = files.filter((f) =>
-			f.type.startsWith('image/') || IMAGE_EXTS.test(f.name)
+		const MEDIA_EXTS = /\.(jpe?g|png|webp|heic|heif|tiff?|mp4|mov|m4v)$/i;
+		const mediaFiles = files.filter((f) =>
+			f.type.startsWith('image/') || f.type.startsWith('video/') || MEDIA_EXTS.test(f.name)
 		);
 
-		if (imageFiles.length === 0) return;
+		if (mediaFiles.length === 0) return;
 
-		if (imageFiles.length > MAX_BATCH) {
-			batchError = `Selected ${imageFiles.length} photos — max ${MAX_BATCH} per batch. Please select fewer files and upload in batches.`;
+		if (mediaFiles.length > MAX_BATCH) {
+			batchError = `Selected ${mediaFiles.length} files — max ${MAX_BATCH} per batch. Please select fewer files and upload in batches.`;
 			return;
 		}
 
 		uploading = true;
-		progress = imageFiles.map((f) => ({ name: f.name, status: 'pending' }));
+		progress = mediaFiles.map((f) => ({ name: f.name, status: 'pending' }));
 
-		for (let i = 0; i < imageFiles.length; i++) {
+		for (let i = 0; i < mediaFiles.length; i++) {
 			progress[i].status = 'uploading';
 			progress = [...progress]; // trigger reactivity
 
 			const formData = new FormData();
-			formData.append('file', imageFiles[i]);
+			formData.append('file', mediaFiles[i]);
 			formData.append('collection', collectionSlug);
 
 			const result = await apiUpload('/api/photos', formData);
@@ -122,13 +122,13 @@
 		ondrop={handleDrop}
 		onpaste={handlePaste}
 	>
-		<p>Drag & drop photos from Finder, or use Browse Files</p>
+		<p>Drag & drop photos or short videos from Finder, or use Browse Files</p>
 		<p class="hint">Tip: In Photos app, use File &gt; Export first, then drag from the export folder</p>
 		<label class="btn btn-outline btn-sm">
 			Browse Files
 			<input
 				type="file"
-				accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+				accept="image/jpeg,image/png,image/webp,image/heic,image/heif,video/mp4,video/quicktime"
 				multiple
 				onchange={handleFileInput}
 				style="display: none;"
