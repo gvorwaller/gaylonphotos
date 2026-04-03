@@ -63,7 +63,7 @@ export function hammingDistance(a, b) {
  * @param {number} [threshold=10] — max Hamming distance to consider near-duplicate
  * @returns {object[][]} array of groups, each group is an array of photos
  */
-export function findDuplicateGroups(photos, threshold = 10) {
+export function findDuplicateGroups(photos, threshold = 8) {
 	const withHash = photos.filter(p => p.phash);
 	const used = new Set();
 	const groups = [];
