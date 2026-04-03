@@ -59,8 +59,15 @@
 		}
 	}
 
+	let videoEl = $state(null);
+
 	let metaItems = $derived.by(() => {
 		const items = [];
+		if (photo.duration) {
+			const mins = Math.floor(photo.duration / 60);
+			const secs = photo.duration % 60;
+			items.push({ label: 'Duration', value: `${mins}:${String(secs).padStart(2, '0')}` });
+		}
 		if (photo.date) items.push({ label: 'Date', value: formatDate(photo.date) });
 		if (photo.camera) items.push({ label: 'Camera', value: photo.camera });
 		if (photo.lens) items.push({ label: 'Lens', value: photo.lens });
@@ -98,7 +105,22 @@
 		{#if prevPhoto}
 			<a href={navUrl(prevPhoto)} class="photo-nav photo-nav-prev" aria-label="Previous photo">&#8249;</a>
 		{/if}
-		<img src={photo.url} alt={photo.description || photo.filename} />
+		{#if photo.type === 'video' && photo.videoUrl}
+			<!-- svelte-ignore a11y_media_has_caption -->
+			<video
+				bind:this={videoEl}
+				src={photo.videoUrl}
+				poster={photo.url}
+				controls
+				playsinline
+				preload="metadata"
+				class="photo-video"
+			>
+				Your browser does not support video playback.
+			</video>
+		{:else}
+			<img src={photo.url} alt={photo.description || photo.filename} />
+		{/if}
 		{#if nextPhoto}
 			<a href={navUrl(nextPhoto)} class="photo-nav photo-nav-next" aria-label="Next photo">&#8250;</a>
 		{/if}
@@ -158,9 +180,14 @@
 	.photo-main {
 		position: relative;
 	}
-	.photo-main img {
+	.photo-main img, .photo-main .photo-video {
 		width: 100%;
 		border-radius: var(--radius-md);
+	}
+	.photo-video {
+		outline: none;
+		background: #000;
+		display: block;
 	}
 	.photo-nav {
 		position: absolute;

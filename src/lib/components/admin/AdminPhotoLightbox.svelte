@@ -24,12 +24,16 @@
 			: (currentIndex >= 0 ? photos[currentIndex] : photo)
 	);
 
+	let videoEl = $state(null);
+
 	function goPrev() {
+		videoEl?.pause();
 		const idx = navIndex ?? currentIndex;
 		if (idx > 0) navIndex = idx - 1;
 	}
 
 	function goNext() {
+		videoEl?.pause();
 		const idx = navIndex ?? currentIndex;
 		if (idx < photos.length - 1) navIndex = idx + 1;
 	}
@@ -104,12 +108,33 @@
 	{/if}
 
 	<div class="lightbox-content">
-		<img src={displayPhoto.url} alt={displayPhoto.description || displayPhoto.filename} class="lightbox-image" />
+		{#if displayPhoto.type === 'video' && displayPhoto.videoUrl}
+			<!-- svelte-ignore a11y_media_has_caption -->
+			<video
+				bind:this={videoEl}
+				src={displayPhoto.videoUrl}
+				poster={displayPhoto.url}
+				controls
+				playsinline
+				preload="metadata"
+				class="lightbox-image"
+			>
+				Your browser does not support video playback.
+			</video>
+		{:else}
+			<img src={displayPhoto.url} alt={displayPhoto.description || displayPhoto.filename} class="lightbox-image" />
+		{/if}
 
 		<div class="lightbox-info">
 			<div class="lightbox-filename">{displayPhoto.filename}</div>
 
 			<div class="lightbox-exif">
+				{#if displayPhoto.duration}
+					<div class="exif-row">
+						<span class="exif-label">Duration</span>
+						<span class="exif-value">{Math.floor(displayPhoto.duration / 60)}:{String(displayPhoto.duration % 60).padStart(2, '0')}</span>
+					</div>
+				{/if}
 				{#if displayPhoto.date}
 					<div class="exif-row">
 						<span class="exif-label">Date</span>
@@ -258,6 +283,10 @@
 		max-height: 85vh;
 		object-fit: contain;
 		border-radius: 4px;
+	}
+	video.lightbox-image {
+		outline: none;
+		background: #000;
 	}
 	.lightbox-info {
 		color: #ccc;

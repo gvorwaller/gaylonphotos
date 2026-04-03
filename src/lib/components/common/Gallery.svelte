@@ -29,6 +29,9 @@
 			{#if photo.favorite}
 				<span class="gallery-fav" aria-label="Favorite">&#9733;</span>
 			{/if}
+			{#if photo.type === 'video'}
+				<span class="gallery-play" aria-label="Video">&#9654;</span>
+			{/if}
 		</button>
 	{/each}
 </div>
@@ -73,6 +76,22 @@
 		color: #ffc107;
 		font-size: 1rem;
 		text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+	}
+	.gallery-play {
+		position: absolute;
+		bottom: 6px;
+		left: 6px;
+		color: #fff;
+		font-size: 0.85rem;
+		background: rgba(0, 0, 0, 0.55);
+		width: 28px;
+		height: 28px;
+		border-radius: 50%;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		text-shadow: none;
+		padding-left: 2px;
 	}
 	.gallery-empty {
 		text-align: center;

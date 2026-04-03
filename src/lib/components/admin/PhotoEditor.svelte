@@ -139,9 +139,15 @@
 	<div class="editor-preview">
 		<button class="preview-btn" onclick={() => onpreview?.(photo)} aria-label="Preview {photo.filename}">
 			<img src={photo.thumbnail} alt={photo.filename} />
+			{#if photo.type === 'video'}
+				<span class="video-badge">&#9654; Video</span>
+			{/if}
 		</button>
 		<div class="editor-meta">
 			<div class="editor-filename">{photo.filename}</div>
+			{#if photo.duration}
+				<div class="editor-duration">{Math.floor(photo.duration / 60)}:{String(photo.duration % 60).padStart(2, '0')}</div>
+			{/if}
 			<div class="editor-gps">
 				{#if displayLocation}
 					<span class="gps-tagged">{displayLocation}</span>
@@ -260,6 +266,21 @@
 		object-fit: contain;
 		border-radius: var(--radius-sm);
 		background: #f5f5f5;
+	}
+	.video-badge {
+		display: block;
+		margin-top: 4px;
+		font-size: 0.65rem;
+		font-weight: 600;
+		color: #fff;
+		background: rgba(0, 0, 0, 0.6);
+		padding: 1px 6px;
+		border-radius: var(--radius-sm);
+	}
+	.editor-duration {
+		font-size: 0.7rem;
+		color: var(--color-text-muted);
+		margin-top: 2px;
 	}
 	.editor-meta {
 		min-width: 0;

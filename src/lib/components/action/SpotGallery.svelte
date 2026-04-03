@@ -112,6 +112,9 @@
 							{#if photo.conditions}
 								<span class="photo-conditions">{photo.conditions}</span>
 							{/if}
+							{#if photo.type === 'video'}
+								<span class="spot-play-badge" aria-label="Video">&#9654;</span>
+							{/if}
 						</button>
 					{/each}
 				</div>
@@ -179,6 +182,21 @@
 	}
 	.spot-photo:hover img {
 		transform: scale(1.05);
+	}
+	.spot-play-badge {
+		position: absolute;
+		bottom: 6px;
+		left: 6px;
+		color: #fff;
+		font-size: 0.85rem;
+		background: rgba(0, 0, 0, 0.55);
+		width: 28px;
+		height: 28px;
+		border-radius: 50%;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding-left: 2px;
 	}
 	.photo-conditions {
 		position: absolute;

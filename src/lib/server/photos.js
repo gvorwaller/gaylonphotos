@@ -1,9 +1,12 @@
 import { readJson, updateJson, createJsonIfNotExists, ensureDir } from './json-store.js';
 import { uploadFile, deleteFile, getCdnUrl } from './storage.js';
+import { extractVideoMetadata, extractVideoThumbnail, normalizeVideo, isWebFriendly } from './video.js';
 import sharp from 'sharp';
 import exifr from 'exifr';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
+import { writeFile, unlink, readFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 
 const THUMB_WIDTH = 400;
 const DISPLAY_WIDTH = 1600;
@@ -298,6 +301,127 @@ export async function processAndUpload(collectionSlug, fileBuffer, originalFilen
 }
 
 /**
+ * Process an uploaded video file and store in DO Spaces.
+ * 1. Write buffer to temp file
+ * 2. Extract metadata (duration) and generate poster/thumbnail
+ * 3. Normalize to web-friendly H.264 MP4 if needed
+ * 4. Upload video, poster, and thumbnail to Spaces
+ * 5. Append record to photos.json
+ *
+ * @param {string} collectionSlug
+ * @param {Buffer} fileBuffer — raw uploaded video bytes
+ * @param {string} originalFilename — e.g. "sunset-clip.mov"
+ * @returns {Promise<object>} the new media object
+ */
+export async function processAndUploadVideo(collectionSlug, fileBuffer, originalFilename) {
+	validateSlug(collectionSlug);
+
+	// Write buffer to temp file (ffmpeg needs a file path, not a buffer)
+	const inputPath = join(tmpdir(), `gp-video-${randomBytes(8).toString('hex')}-input`);
+	let normalizedPath = null;
+	const uploadedKeys = [];
+
+	try {
+		await writeFile(inputPath, fileBuffer);
+
+		// 1. Extract metadata and thumbnail/poster
+		const meta = await extractVideoMetadata(inputPath);
+		const { posterBuffer, thumbBuffer } = await extractVideoThumbnail(inputPath);
+
+		// 2. Normalize to H.264 MP4 if needed
+		let videoBuffer;
+		if (isWebFriendly(meta)) {
+			// Already web-friendly — just ensure faststart
+			normalizedPath = await normalizeVideo(inputPath, meta);
+			videoBuffer = await readFile(normalizedPath);
+		} else {
+			// Re-encode
+			normalizedPath = await normalizeVideo(inputPath, meta);
+			videoBuffer = await readFile(normalizedPath);
+		}
+
+		// 3. Generate unique upload ID
+		const baseId = originalFilename.replace(/\.[^.]+$/, '')
+			.replace(/[^a-zA-Z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+		const uploadId = `${baseId || 'video'}-${randomBytes(4).toString('hex')}`;
+
+		// 4. Upload to Spaces: video (.mp4), poster (.jpg), thumbnail
+		const videoKey = `${collectionSlug}/${uploadId}.mp4`;
+		const posterKey = `${collectionSlug}/${uploadId}.jpg`;
+		const thumbKey = `${collectionSlug}/thumbs/${uploadId}.jpg`;
+
+		const [videoUpload, posterUpload, thumbUpload] = await Promise.allSettled([
+			uploadFile(videoKey, videoBuffer, 'video/mp4'),
+			uploadFile(posterKey, posterBuffer, 'image/jpeg'),
+			uploadFile(thumbKey, thumbBuffer, 'image/jpeg')
+		]);
+		if (videoUpload.status === 'fulfilled') uploadedKeys.push(videoKey);
+		if (posterUpload.status === 'fulfilled') uploadedKeys.push(posterKey);
+		if (thumbUpload.status === 'fulfilled') uploadedKeys.push(thumbKey);
+		if (videoUpload.status === 'rejected') throw videoUpload.reason;
+		if (posterUpload.status === 'rejected') throw posterUpload.reason;
+		if (thumbUpload.status === 'rejected') throw thumbUpload.reason;
+
+		// 5. Build media record
+		const record = {
+			id: uploadId,
+			type: 'video',
+			filename: originalFilename,
+			url: posterUpload.value.url,         // poster JPEG — backward compat with <img src={url}>
+			videoUrl: videoUpload.value.url,      // actual video MP4
+			thumbnail: thumbUpload.value.url,
+			duration: meta.duration,
+			description: '',
+			tags: [],
+			favorite: false,
+			gps: null,
+			gpsSource: null,
+			date: null,
+			camera: null,
+			lens: null,
+			focalLength: null,
+			iso: null,
+			aperture: null,
+			shutterSpeed: null
+		};
+
+		// 6. Atomically append to photos.json
+		const filePath = photosPath(collectionSlug);
+		await ensureDir(join(DATA_DIR, collectionSlug));
+		try {
+			await createJsonIfNotExists(filePath, { photos: [] });
+		} catch (err) {
+			if (err.message !== 'FILE_EXISTS') throw err;
+		}
+
+		await updateJson(filePath, (data) => {
+			if (!Array.isArray(data.photos)) data.photos = [];
+			if (data.photos.some((p) => p.id === uploadId)) {
+				throw new Error(`Duplicate media ID: ${uploadId}`);
+			}
+			data.photos.push(record);
+			return data;
+		});
+
+		return record;
+	} catch (err) {
+		// Rollback: clean up any uploaded Spaces objects on failure
+		for (const key of uploadedKeys) {
+			try {
+				await deleteFile(key);
+			} catch {
+				console.error(`Rollback: failed to delete ${key}`);
+			}
+		}
+		throw err;
+	} finally {
+		// Clean up temp files
+		await unlink(inputPath).catch(() => {});
+		if (normalizedPath) await unlink(normalizedPath).catch(() => {});
+	}
+}
+
+/**
  * Update metadata fields on an existing photo.
  * Only the provided fields are merged — others are left unchanged.
  * Rejects updates to structural fields (id, url, thumbnail).
@@ -309,7 +433,7 @@ export async function processAndUpload(collectionSlug, fileBuffer, originalFilen
  */
 export async function updatePhotoMetadata(collectionSlug, photoId, updates) {
 	// Prevent overwriting structural/derived fields
-	const forbidden = ['id', 'filename', 'url', 'thumbnail'];
+	const forbidden = ['id', 'filename', 'url', 'thumbnail', 'videoUrl', 'type'];
 	for (const key of forbidden) {
 		delete updates[key];
 	}
@@ -386,13 +510,16 @@ export async function deletePhoto(collectionSlug, photoId) {
 	}
 
 	// Delete from Spaces FIRST — if this fails, metadata stays intact for retry
-	const displayKey = `${collectionSlug}/${photoId}.jpg`;
+	const posterKey = `${collectionSlug}/${photoId}.jpg`;
 	const thumbKey = `${collectionSlug}/thumbs/${photoId}.jpg`;
+	const keysToDelete = [posterKey, thumbKey];
 
-	await Promise.all([
-		deleteFile(displayKey),
-		deleteFile(thumbKey)
-	]);
+	// Videos also have an .mp4 file
+	if (photo.type === 'video') {
+		keysToDelete.push(`${collectionSlug}/${photoId}.mp4`);
+	}
+
+	await Promise.all(keysToDelete.map((key) => deleteFile(key)));
 
 	// Then remove from photos.json atomically
 	await updateJson(filePath, (data) => {
