@@ -13,7 +13,7 @@ export async function GET({ url }) {
 		return json({ error: 'Invalid collection slug' }, { status: 400 });
 	}
 
-	const threshold = parseInt(url.searchParams.get('threshold') || '10', 10);
+	const threshold = parseInt(url.searchParams.get('threshold') || '8', 10);
 	if (isNaN(threshold) || threshold < 0 || threshold > 64) {
 		return json({ error: 'threshold must be 0-64' }, { status: 400 });
 	}
