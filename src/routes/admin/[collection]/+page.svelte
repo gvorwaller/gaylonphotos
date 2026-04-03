@@ -2,6 +2,7 @@
 	import PhotoUploader from '$lib/components/admin/PhotoUploader.svelte';
 	import PhotoEditor from '$lib/components/admin/PhotoEditor.svelte';
 	import AdminPhotoLightbox from '$lib/components/admin/AdminPhotoLightbox.svelte';
+	import DuplicateReview from '$lib/components/admin/DuplicateReview.svelte';
 	import { apiPost, apiDelete } from '$lib/api.js';
 	import { invalidateAll } from '$app/navigation';
 	import Modal from '$lib/components/common/Modal.svelte';
@@ -42,6 +43,13 @@
 	}
 
 	let untaggedCount = $derived(photos.filter((p) => p.gpsSource === null).length);
+
+	// --- Duplicate detection ---
+	let showDuplicates = $state(false);
+
+	function handleDuplicateDeleted(photoId) {
+		handleDeleted(photoId);
+	}
 
 	// --- Photo lightbox preview ---
 	let previewPhoto = $state(null);
@@ -327,6 +335,11 @@
 					<button class="btn btn-outline btn-sm" onclick={cancelAutoLocate}>Stop</button>
 				{/if}
 			{/if}
+			{#if photos.length > 1}
+				<button class="btn btn-outline btn-sm" onclick={() => showDuplicates = true}>
+					Find Duplicates
+				</button>
+			{/if}
 			{#if untaggedCount > 0}
 				<a href="/admin/{data.collection.slug}/geotag" class="btn btn-outline btn-sm">
 					Geo-tag {untaggedCount} photo{untaggedCount !== 1 ? 's' : ''}
@@ -533,6 +546,14 @@
 			</div>
 		</div>
 	</div>
+{/if}
+
+{#if showDuplicates}
+	<DuplicateReview
+		collectionSlug={data.collection.slug}
+		onclose={() => showDuplicates = false}
+		ondeleted={handleDuplicateDeleted}
+	/>
 {/if}
 
 <style>

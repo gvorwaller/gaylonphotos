@@ -1,16 +1,29 @@
 import { readJson, updateJson, createJsonIfNotExists, ensureDir } from './json-store.js';
 import { uploadFile, deleteFile, getCdnUrl } from './storage.js';
 import { extractVideoMetadata, extractVideoThumbnail, normalizeVideo, isWebFriendly } from './video.js';
+import { computePhash, hammingDistance, findDuplicateGroups } from './phash.js';
 import sharp from 'sharp';
 import exifr from 'exifr';
 import { join } from 'node:path';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, createHash } from 'node:crypto';
 import { writeFile, unlink, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 
 const THUMB_WIDTH = 400;
 const DISPLAY_WIDTH = 1600;
 const DATA_DIR = 'data';
+
+// Re-export phash utilities for consumers that import from photos.js
+export { computePhash, hammingDistance, findDuplicateGroups };
+
+/**
+ * Compute SHA-256 hash of a buffer.
+ * @param {Buffer} buffer
+ * @returns {string} hex digest
+ */
+function fileHashFn(buffer) {
+	return createHash('sha256').update(buffer).digest('hex');
+}
 
 /**
  * Validate a collection slug to prevent path traversal.
@@ -208,6 +221,10 @@ export async function processAndUpload(collectionSlug, fileBuffer, originalFilen
 	// 1. Extract EXIF before any resizing (resizing strips metadata)
 	const exifData = await extractExif(fileBuffer);
 
+	// 1b. Compute perceptual hash and file hash in parallel with EXIF
+	const phash = await computePhash(fileBuffer).catch(() => null);
+	const fHash = fileHashFn(fileBuffer);
+
 	// 2. Generate display-size and thumbnail images (normalized to JPEG)
 	const [displayBuffer, thumbBuffer] = await Promise.all([
 		sharp(fileBuffer)
@@ -264,7 +281,9 @@ export async function processAndUpload(collectionSlug, fileBuffer, originalFilen
 			focalLength: exifData.focalLength,
 			iso: exifData.iso,
 			aperture: exifData.aperture,
-			shutterSpeed: exifData.shutterSpeed
+			shutterSpeed: exifData.shutterSpeed,
+			phash: phash || undefined,
+			fileHash: fHash
 		};
 
 		// 6. Atomically append to photos.json — ensure file exists (atomic — prevents TOCTOU race)
@@ -328,6 +347,10 @@ export async function processAndUploadVideo(collectionSlug, fileBuffer, original
 		const meta = await extractVideoMetadata(inputPath);
 		const { posterBuffer, thumbBuffer } = await extractVideoThumbnail(inputPath);
 
+		// 1b. Compute perceptual hash from poster frame and file hash
+		const phash = await computePhash(posterBuffer).catch(() => null);
+		const fHash = fileHashFn(fileBuffer);
+
 		// 2. Normalize to H.264 MP4 if needed
 		let videoBuffer;
 		if (isWebFriendly(meta)) {
@@ -382,7 +405,9 @@ export async function processAndUploadVideo(collectionSlug, fileBuffer, original
 			focalLength: null,
 			iso: null,
 			aperture: null,
-			shutterSpeed: null
+			shutterSpeed: null,
+			phash: phash || undefined,
+			fileHash: fHash
 		};
 
 		// 6. Atomically append to photos.json
@@ -433,7 +458,7 @@ export async function processAndUploadVideo(collectionSlug, fileBuffer, original
  */
 export async function updatePhotoMetadata(collectionSlug, photoId, updates) {
 	// Prevent overwriting structural/derived fields
-	const forbidden = ['id', 'filename', 'url', 'thumbnail', 'videoUrl', 'type'];
+	const forbidden = ['id', 'filename', 'url', 'thumbnail', 'videoUrl', 'type', 'phash', 'fileHash'];
 	for (const key of forbidden) {
 		delete updates[key];
 	}

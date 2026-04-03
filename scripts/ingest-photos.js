@@ -220,8 +220,9 @@ async function readTakeoutSidecar(photoPath) {
 
 // ── Photo ID Generation ─────────────────────────────────────────────
 
-import { randomBytes } from 'node:crypto';
+import { randomBytes, createHash } from 'node:crypto';
 import { extractVideoMetadata, extractVideoThumbnail, normalizeVideo, isWebFriendly } from '../src/lib/server/video.js';
+import { computePhash } from '../src/lib/server/phash.js';
 import { tmpdir } from 'node:os';
 import { unlink } from 'node:fs/promises';
 
@@ -315,8 +316,14 @@ async function ingest(collectionSlug, sourceDir, autoSpecies = false) {
 
 			if (isVideo) {
 				// ── Video ingest path ──
+				const rawVideoBuffer = await readFile(filePath);
+				const videoFileHash = createHash('sha256').update(rawVideoBuffer).digest('hex');
+
 				const meta = await extractVideoMetadata(filePath);
 				const { posterBuffer, thumbBuffer } = await extractVideoThumbnail(filePath);
+
+				// Compute phash from poster frame
+				const videoPhash = await computePhash(posterBuffer).catch(() => null);
 
 				// Normalize to H.264 MP4
 				let normalizedPath = null;
@@ -361,7 +368,9 @@ async function ingest(collectionSlug, sourceDir, autoSpecies = false) {
 					focalLength: null,
 					iso: null,
 					aperture: null,
-					shutterSpeed: null
+					shutterSpeed: null,
+					phash: videoPhash || undefined,
+					fileHash: videoFileHash
 				};
 
 				photosData.photos.push(record);
@@ -376,6 +385,10 @@ async function ingest(collectionSlug, sourceDir, autoSpecies = false) {
 
 				// Read file
 				const fileBuffer = await readFile(filePath);
+
+				// Compute perceptual hash and file hash
+				const phash = await computePhash(fileBuffer).catch(() => null);
+				const fHash = createHash('sha256').update(fileBuffer).digest('hex');
 
 				// Extract EXIF
 				const exifData = await extractExif(fileBuffer);
@@ -440,7 +453,9 @@ async function ingest(collectionSlug, sourceDir, autoSpecies = false) {
 					focalLength: metadata.focalLength,
 					iso: metadata.iso,
 					aperture: metadata.aperture,
-					shutterSpeed: metadata.shutterSpeed
+					shutterSpeed: metadata.shutterSpeed,
+					phash: phash || undefined,
+					fileHash: fHash
 				};
 
 				// Auto-identify species if flag is set
