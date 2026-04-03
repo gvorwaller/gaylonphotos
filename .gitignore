@@ -27,6 +27,7 @@ Thumbs.db
 # IDE / tooling
 .vscode/
 .idea/
+.claude/worktrees/
 .todos/
 .sidecar/
 .sidecar-agent
