@@ -1,6 +1,7 @@
 <script>
 	import '../styles/global.css';
 	import Hamburger from '$lib/components/common/Hamburger.svelte';
+	import HelpScreen from '$lib/components/common/HelpScreen.svelte';
 	import { currentUser } from '$lib/stores.js';
 	import { page } from '$app/stores';
 	import { afterNavigate } from '$app/navigation';
@@ -8,6 +9,7 @@
 	let { data, children } = $props();
 
 	let menuOpen = $state(false);
+	let helpOpen = $state(false);
 
 	$effect(() => {
 		currentUser.set(data.user);
@@ -55,7 +57,17 @@
 		{:else}
 			<div class="menu-empty">No collections yet</div>
 		{/each}
+		<div class="menu-divider"></div>
+		<button
+			class="menu-link menu-help-btn"
+			onclick={() => { helpOpen = true; menuOpen = false; }}
+		>
+			<span class="menu-link-name">Help &amp; Tips</span>
+			<span class="menu-link-type">?</span>
+		</button>
 	</div>
+
+	<HelpScreen show={helpOpen} onclose={() => helpOpen = false} />
 {/if}
 
 {@render children()}
@@ -175,5 +187,17 @@
 		padding: 16px 20px;
 		color: var(--color-text-muted);
 		font-size: 0.875rem;
+	}
+	.menu-divider {
+		height: 1px;
+		background: var(--color-border);
+		margin: 8px 20px;
+	}
+	.menu-help-btn {
+		border: none;
+		background: none;
+		cursor: pointer;
+		font-family: inherit;
+		width: 100%;
 	}
 </style>
