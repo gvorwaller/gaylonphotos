@@ -58,12 +58,36 @@ export async function extractVideoMetadata(filePath) {
 	const videoStream = probe.streams?.find((s) => s.codec_type === 'video');
 	const audioStream = probe.streams?.find((s) => s.codec_type === 'audio');
 
+	// Extract creation date from format tags (common in MP4/MOV)
+	const creationTime = probe.format?.tags?.creation_time || null;
+	let date = null;
+	if (creationTime) {
+		try {
+			const d = new Date(creationTime);
+			if (!isNaN(d.getTime())) date = d.toISOString();
+		} catch { /* ignore */ }
+	}
+
+	// Extract GPS from Apple QuickTime location tag (ISO 6709 format: +DD.DDDD+DDD.DDDD)
+	let gps = null;
+	const locationTag = probe.format?.tags?.['com.apple.quicktime.location.ISO6709'] || null;
+	if (locationTag) {
+		const match = locationTag.match(/([+-]\d+\.?\d*?)([+-]\d+\.?\d*)/);
+		if (match) {
+			const lat = parseFloat(match[1]);
+			const lng = parseFloat(match[2]);
+			if (isFinite(lat) && isFinite(lng)) gps = { lat, lng };
+		}
+	}
+
 	return {
 		duration: Math.round(parseFloat(probe.format?.duration || '0')),
 		width: videoStream?.width || 0,
 		height: videoStream?.height || 0,
 		codec: videoStream?.codec_name || 'unknown',
-		audioCodec: audioStream?.codec_name || null
+		audioCodec: audioStream?.codec_name || null,
+		date,
+		gps
 	};
 }
 
