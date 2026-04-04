@@ -132,11 +132,15 @@
 			if (!b) return;
 			const ne = b.getNorthEast();
 			const sw = b.getSouthWest();
+			const c = map.getCenter();
 			onboundschange({
 				north: ne.lat(),
 				south: sw.lat(),
 				east: ne.lng(),
-				west: sw.lng()
+				west: sw.lng(),
+				centerLat: c.lat(),
+				centerLng: c.lng(),
+				zoom: map.getZoom()
 			});
 		});
 
