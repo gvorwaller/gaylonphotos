@@ -69,6 +69,7 @@
 							<li><strong>Move around</strong> — Drag the map with your finger or mouse to pan to a different area.</li>
 							<li><strong>Tap a marker</strong> — Map markers show a popup with a photo preview and details. Tap it to learn more.</li>
 							<li><strong>Filter by Map</strong> — On some pages you'll see a "Filter by Map" button above the photo grid. Turn it on, then pan and zoom the map — the photos below will update to show only what's visible on the map.</li>
+							<li><strong>Show Family Heritage</strong> — On travel collections, check the <strong>"Show Family Heritage"</strong> box (top right, above the map) to overlay colored diamond markers showing where ancestors lived. See the <em>Family Heritage Panel</em> section below for full details.</li>
 							<li><strong>Map styles</strong> — Use the map type control to switch between road map, satellite, and terrain views.</li>
 						</ul>
 					</div>

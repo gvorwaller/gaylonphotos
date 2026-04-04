@@ -8,26 +8,46 @@
 	import SpotGallery from '$lib/components/action/SpotGallery.svelte';
 
 	import { page } from '$app/state';
+	import { browser } from '$app/environment';
+	import { untrack } from 'svelte';
 
 	let { data } = $props();
+
+	function ssGet(key) { return browser ? sessionStorage.getItem(key) : null; }
+	function ssSet(key, val) { if (browser) sessionStorage.setItem(key, val); }
+
+	// Capture initial slug at mount — used only for sessionStorage init (runs once per mount)
+	const _initSlug = untrack(() => data.collection.slug);
 
 	let filterSpecies = $state(null);
 	let mapBounds = $state(null);
 	let mapFilterActive = $state(false);
-	let showAncestryOnMap = $state(false);
-	let gotoTarget = $state(null);
+	let showAncestryOnMap = $state(ssGet(`ancestry-toggle-${_initSlug}`) === 'true');
 	let prevSlug; // Plain let, not $state — must not trigger effect re-runs
+
+	// Restore last map position when returning to this collection
+	const _savedPos = ssGet(`map-pos-${_initSlug}`);
+	let gotoTarget = $state(_savedPos ? { ...JSON.parse(_savedPos), _ts: Date.now() } : null);
 
 	// Reset filters when navigating between collections (not on data invalidation)
 	$effect(() => {
-		const slug = data.collection.slug;
-		if (prevSlug !== undefined && slug !== prevSlug) {
+		const currentSlug = data.collection.slug;
+		if (prevSlug !== undefined && currentSlug !== prevSlug) {
 			filterSpecies = null;
 			mapBounds = null;
 			mapFilterActive = false;
-			showAncestryOnMap = false;
+			// Restore per-collection sessionStorage state rather than blanket reset
+			showAncestryOnMap = ssGet(`ancestry-toggle-${currentSlug}`) === 'true';
+			const savedPos = ssGet(`map-pos-${currentSlug}`);
+			gotoTarget = savedPos ? { ...JSON.parse(savedPos), _ts: Date.now() } : null;
 		}
-		prevSlug = slug;
+		prevSlug = currentSlug;
+	});
+
+	// Persist ancestry toggle whenever it changes (declared after slug-change reset so
+	// the restored value is already applied before we write to sessionStorage)
+	$effect(() => {
+		ssSet(`ancestry-toggle-${data.collection.slug}`, String(showAncestryOnMap));
 	});
 
 	// Handle ?mapLat=&mapLng= query params (from "Show on Map" in photo detail)
@@ -53,6 +73,9 @@
 
 	function handleBoundsChange(bounds) {
 		mapBounds = bounds;
+		if (bounds.centerLat != null && bounds.centerLng != null && bounds.zoom != null) {
+			ssSet(`map-pos-${data.collection.slug}`, JSON.stringify({ lat: bounds.centerLat, lng: bounds.centerLng, zoom: bounds.zoom }));
+		}
 	}
 
 	function isInBounds(photo) {
