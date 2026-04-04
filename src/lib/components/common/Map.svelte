@@ -1,4 +1,5 @@
 <script>
+	import { untrack } from 'svelte';
 	/**
 	 * Base Google Maps wrapper component.
 	 * Loads the Maps JavaScript API and renders an interactive map.
@@ -209,17 +210,20 @@
 			googleMarkers.push({ marker, handler: handleClick, contentEl });
 		}
 
-		// Auto-fit bounds only on initial load (don't fight user panning)
+		// Auto-fit bounds only on initial load (don't fight user panning).
+		// Skip if a saved position exists — the gotoTarget effect will handle centering.
 		if (!initialFitDone && markers.length > 0) {
 			initialFitDone = true;
-			if (markers.length > 1) {
-				const bounds = new google.maps.LatLngBounds();
-				for (const m of markers) {
-					bounds.extend({ lat: m.lat, lng: m.lng });
+			if (!untrack(() => gotoTarget)) {
+				if (markers.length > 1) {
+					const bounds = new google.maps.LatLngBounds();
+					for (const m of markers) {
+						bounds.extend({ lat: m.lat, lng: m.lng });
+					}
+					map.fitBounds(bounds, { padding: 50 });
+				} else {
+					map.setCenter({ lat: markers[0].lat, lng: markers[0].lng });
 				}
-				map.fitBounds(bounds, { padding: 50 });
-			} else {
-				map.setCenter({ lat: markers[0].lat, lng: markers[0].lng });
 			}
 		}
 
