@@ -25,8 +25,11 @@
 	let showAncestryOnMap = $state(ssGet(`ancestry-toggle-${_initSlug}`) === 'true');
 	let prevSlug; // Plain let, not $state — must not trigger effect re-runs
 
-	// Restore last map position when returning to this collection
-	const _savedPos = ssGet(`map-pos-${_initSlug}`);
+	// Restore last map position only when back-navigating from a photo detail view.
+	// On fresh entry (home page, collections list, direct URL) let the map fitBounds normally.
+	const _fromDetail = ssGet(`${_initSlug}_fromDetail`) === '1';
+	if (_fromDetail && browser) sessionStorage.removeItem(`${_initSlug}_fromDetail`);
+	const _savedPos = _fromDetail ? ssGet(`map-pos-${_initSlug}`) : null;
 	let gotoTarget = $state(_savedPos ? { ...JSON.parse(_savedPos), _ts: Date.now() } : null);
 
 	// Reset filters when navigating between collections (not on data invalidation)
@@ -38,7 +41,9 @@
 			mapFilterActive = false;
 			// Restore per-collection sessionStorage state rather than blanket reset
 			showAncestryOnMap = ssGet(`ancestry-toggle-${currentSlug}`) === 'true';
-			const savedPos = ssGet(`map-pos-${currentSlug}`);
+			const fromDetail = ssGet(`${currentSlug}_fromDetail`) === '1';
+			if (fromDetail) sessionStorage.removeItem(`${currentSlug}_fromDetail`);
+			const savedPos = fromDetail ? ssGet(`map-pos-${currentSlug}`) : null;
 			gotoTarget = savedPos ? { ...JSON.parse(savedPos), _ts: Date.now() } : null;
 		}
 		prevSlug = currentSlug;
