@@ -7,8 +7,6 @@
 	let error = $state(null);
 	let groups = $state([]);
 	let totalPhotos = $state(0);
-	let hashedCount = $state(0);
-	let unhashedCount = $state(0);
 
 	// Track which photos are marked for deletion (not keepers)
 	let markedForDelete = $state(new Set());
@@ -26,8 +24,6 @@
 		if (result.ok) {
 			groups = result.data.groups;
 			totalPhotos = result.data.total;
-			hashedCount = result.data.hashed;
-			unhashedCount = result.data.unhashed;
 		} else {
 			error = result.error;
 		}
@@ -110,23 +106,17 @@
 		</div>
 
 		{#if loading}
-			<div class="dup-loading">Scanning {totalPhotos || '...'} photos for duplicates...</div>
+			<div class="dup-loading">Scanning photos for duplicates{totalPhotos ? ` (${totalPhotos})` : ''}…</div>
 		{:else if error}
 			<div class="dup-error">Error: {error}</div>
 		{:else if groups.length === 0}
 			<div class="dup-empty">
-				<p>No duplicates found among {hashedCount} hashed photos.</p>
-				{#if unhashedCount > 0}
-					<p class="dup-hint">{unhashedCount} photos don't have perceptual hashes yet. Run the backfill script to include them.</p>
-				{/if}
+				<p>No duplicates found among {totalPhotos} photos.</p>
 			</div>
 		{:else}
 			<div class="dup-summary">
 				<span class="dup-stat">{groups.length} duplicate group{groups.length !== 1 ? 's' : ''}</span>
 				<span class="dup-stat">{groups.reduce((n, g) => n + g.length, 0)} photos involved</span>
-				{#if unhashedCount > 0}
-					<span class="dup-hint-inline">{unhashedCount} unhashed</span>
-				{/if}
 				<span class="dup-divider">|</span>
 				<button class="btn btn-outline btn-xs" onclick={autoSelectDuplicates}>Auto-select duplicates</button>
 				<button class="btn btn-outline btn-xs" onclick={clearSelections}>Clear</button>
@@ -229,10 +219,6 @@
 	.dup-error {
 		color: var(--color-danger);
 	}
-	.dup-hint {
-		font-size: 0.8rem;
-		margin-top: 8px;
-	}
 	.dup-summary {
 		display: flex;
 		align-items: center;
@@ -246,11 +232,6 @@
 	.dup-stat {
 		font-weight: 600;
 		color: var(--color-text-muted);
-	}
-	.dup-hint-inline {
-		font-size: 0.75rem;
-		color: var(--color-text-muted);
-		font-style: italic;
 	}
 	.dup-divider {
 		color: #dee2e6;

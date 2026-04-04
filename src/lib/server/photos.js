@@ -88,6 +88,53 @@ export async function listPhotos(collectionSlug) {
 }
 
 /**
+ * Compute and persist perceptual hashes for any photos in the collection
+ * that are missing them. Downloads the thumbnail (or display image) from CDN,
+ * computes dHash, and saves the result back to photos.json.
+ *
+ * @param {string} collectionSlug
+ * @returns {Promise<{ computed: number, failed: number }>}
+ */
+export async function backfillMissingHashes(collectionSlug) {
+	const photos = await listPhotos(collectionSlug);
+	const needsHash = photos.filter((p) => !p.phash);
+	if (needsHash.length === 0) return { computed: 0, failed: 0 };
+
+	// Compute hashes for each photo that's missing one
+	/** @type {Map<string, string>} */
+	const computed = new Map();
+	let failed = 0;
+
+	for (const photo of needsHash) {
+		try {
+			const imageUrl = photo.thumbnail || photo.url;
+			const res = await fetch(imageUrl);
+			if (!res.ok) throw new Error(`HTTP ${res.status}`);
+			const buffer = Buffer.from(await res.arrayBuffer());
+			const phash = await computePhash(buffer);
+			computed.set(photo.id, phash);
+		} catch {
+			failed++;
+		}
+	}
+
+	// Persist all newly computed hashes in a single atomic write
+	if (computed.size > 0) {
+		const filePath = photosPath(collectionSlug);
+		await updateJson(filePath, (data) => {
+			for (const photo of data.photos) {
+				if (computed.has(photo.id)) {
+					photo.phash = computed.get(photo.id);
+				}
+			}
+			return data;
+		});
+	}
+
+	return { computed: computed.size, failed };
+}
+
+/**
  * Get a single photo by ID.
  * @param {string} collectionSlug
  * @param {string} photoId

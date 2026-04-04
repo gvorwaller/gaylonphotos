@@ -1,5 +1,5 @@
 import { json } from '@sveltejs/kit';
-import { listPhotos } from '$lib/server/photos.js';
+import { listPhotos, backfillMissingHashes } from '$lib/server/photos.js';
 import { findDuplicateGroups } from '$lib/server/phash.js';
 
 /** GET /api/duplicates?collection=slug&threshold=10 */
@@ -18,9 +18,11 @@ export async function GET({ url }) {
 		return json({ error: 'threshold must be 0-64' }, { status: 400 });
 	}
 
+	// Compute and persist hashes for any photos that don't have one yet
+	await backfillMissingHashes(collection);
+
+	// Reload photos so all newly hashed photos are included in the comparison
 	const photos = await listPhotos(collection);
-	const withHash = photos.filter(p => p.phash);
-	const withoutHash = photos.filter(p => !p.phash);
 
 	// Find perceptual duplicate groups
 	const groups = findDuplicateGroups(photos, threshold);
@@ -49,8 +51,6 @@ export async function GET({ url }) {
 
 	return json({
 		total: photos.length,
-		hashed: withHash.length,
-		unhashed: withoutHash.length,
 		groups: groups.map(group => group.map(trim)),
 		exactDuplicates: exactDupes
 	});
