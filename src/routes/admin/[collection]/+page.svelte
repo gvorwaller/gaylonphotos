@@ -335,11 +335,9 @@
 					<button class="btn btn-outline btn-sm" onclick={cancelAutoLocate}>Stop</button>
 				{/if}
 			{/if}
-			{#if photos.length > 1}
-				<button class="btn btn-outline btn-sm" onclick={() => showDuplicates = true}>
-					Find Duplicates
-				</button>
-			{/if}
+			<button class="btn btn-outline btn-sm" onclick={() => showDuplicates = true}>
+				Find Duplicates
+			</button>
 			{#if untaggedCount > 0}
 				<a href="/admin/{data.collection.slug}/geotag" class="btn btn-outline btn-sm">
 					Geo-tag {untaggedCount} photo{untaggedCount !== 1 ? 's' : ''}
@@ -561,6 +559,8 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
+		flex-wrap: wrap;
+		gap: 8px;
 	}
 	.page-header div {
 		display: flex;
@@ -575,6 +575,7 @@
 		display: flex;
 		align-items: center;
 		gap: 8px;
+		flex-wrap: wrap;
 	}
 	.auto-id-progress {
 		font-size: 0.8rem;
