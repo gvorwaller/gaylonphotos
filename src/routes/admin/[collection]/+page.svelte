@@ -69,8 +69,48 @@
 	let showBatchDeleteConfirm = $state(false);
 	let batchDeleteProgress = $state(null);
 
+	// --- Search / filter ---
+	let searchText = $state('');
+	let dateFrom = $state('');
+	let dateTo = $state('');
+
+	let hasFilters = $derived(!!(searchText.trim() || dateFrom || dateTo));
+
+	let filteredPhotos = $derived.by(() => {
+		let result = photos;
+
+		const q = searchText.trim().toLowerCase();
+		if (q) {
+			result = result.filter((p) =>
+				p.filename?.toLowerCase().includes(q) ||
+				p.description?.toLowerCase().includes(q) ||
+				p.locationName?.toLowerCase().includes(q) ||
+				(p.tags ?? []).some((t) => t.toLowerCase().includes(q)) ||
+				p.species?.toLowerCase().includes(q) ||
+				p.spot?.toLowerCase().includes(q) ||
+				p.conditions?.toLowerCase().includes(q)
+			);
+		}
+
+		if (dateFrom) {
+			result = result.filter((p) => p.date && p.date.slice(0, 10) >= dateFrom);
+		}
+
+		if (dateTo) {
+			result = result.filter((p) => p.date && p.date.slice(0, 10) <= dateTo);
+		}
+
+		return result;
+	});
+
+	function clearFilters() {
+		searchText = '';
+		dateFrom = '';
+		dateTo = '';
+	}
+
 	let selectedCount = $derived(selectedPhotos.size);
-	let allSelected = $derived(photos.length > 0 && selectedPhotos.size === photos.length);
+	let allSelected = $derived(filteredPhotos.length > 0 && filteredPhotos.every((p) => selectedPhotos.has(p.id)));
 
 	function toggleSelectMode() {
 		selectMode = !selectMode;
@@ -85,7 +125,9 @@
 	}
 
 	function selectAll() {
-		selectedPhotos = new Set(photos.map((p) => p.id));
+		const next = new Set(selectedPhotos);
+		for (const p of filteredPhotos) next.add(p.id);
+		selectedPhotos = next;
 	}
 
 	function deselectAll() {
@@ -353,13 +395,49 @@
 
 	<section style="margin-top: 32px;">
 		<div class="photos-header">
-			<h2 class="subsection-title">Photos ({photos.length})</h2>
+			<h2 class="subsection-title">
+				Photos ({#if hasFilters}{filteredPhotos.length} of {/if}{photos.length})
+			</h2>
 			{#if photos.length > 0}
 				<button class="btn btn-outline btn-sm" onclick={toggleSelectMode}>
 					{selectMode ? 'Cancel Select' : 'Select'}
 				</button>
 			{/if}
 		</div>
+
+		{#if photos.length > 0}
+			<div class="filter-bar">
+				<input
+					class="filter-search"
+					type="search"
+					placeholder="Search filename, description, location, tags…"
+					bind:value={searchText}
+				/>
+				<input
+					class="filter-date"
+					type="date"
+					title="From date"
+					aria-label="From date"
+					bind:value={dateFrom}
+				/>
+				<span class="filter-date-sep" aria-hidden="true">–</span>
+				<input
+					class="filter-date"
+					type="date"
+					title="To date"
+					aria-label="To date"
+					bind:value={dateTo}
+				/>
+				{#if hasFilters}
+					<button class="btn btn-outline btn-xs" onclick={clearFilters}>Clear</button>
+				{/if}
+			</div>
+			{#if hasFilters}
+				<p class="filter-result-count">
+					Showing {filteredPhotos.length} of {photos.length} photo{photos.length !== 1 ? 's' : ''}
+				</p>
+			{/if}
+		{/if}
 
 		{#if selectMode}
 			<div class="batch-bar">
@@ -388,9 +466,13 @@
 			<p style="color: var(--color-text-muted); padding: 24px 0;">
 				No photos yet. Upload some above.
 			</p>
+		{:else if filteredPhotos.length === 0}
+			<p style="color: var(--color-text-muted); padding: 24px 0;">
+				No photos match your filters.
+			</p>
 		{:else}
 			<div class="photo-list">
-				{#each photos as photo (photo.id)}
+				{#each filteredPhotos as photo (photo.id)}
 					{#if selectMode}
 						<div class="selectable-photo" class:selected={selectedPhotos.has(photo.id)}>
 							<button
@@ -829,5 +911,52 @@
 		gap: 8px;
 		padding: 12px 20px;
 		border-top: 1px solid var(--color-border);
+	}
+
+	/* --- Search / filter bar --- */
+	.filter-bar {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		margin-top: 10px;
+		flex-wrap: wrap;
+	}
+	.filter-search {
+		flex: 1;
+		min-width: 200px;
+		padding: 6px 10px;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		font-size: 0.85rem;
+		font-family: inherit;
+		background: #fff;
+		color: var(--color-text);
+	}
+	.filter-search:focus {
+		outline: none;
+		border-color: var(--color-primary);
+	}
+	.filter-date {
+		padding: 5px 8px;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		font-size: 0.85rem;
+		font-family: inherit;
+		background: #fff;
+		color: var(--color-text);
+	}
+	.filter-date:focus {
+		outline: none;
+		border-color: var(--color-primary);
+	}
+	.filter-date-sep {
+		color: var(--color-text-muted);
+		font-size: 0.85rem;
+		flex-shrink: 0;
+	}
+	.filter-result-count {
+		font-size: 0.8rem;
+		color: var(--color-text-muted);
+		margin: 6px 0 0;
 	}
 </style>
