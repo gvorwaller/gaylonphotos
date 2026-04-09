@@ -299,7 +299,20 @@
 		};
 	}
 
+	function clearPlaceCoords(placeId) {
+		updatePlaceCoords(placeId, null, null);
+	}
+
 	let failedCount = $derived(localAncestry?.places?.filter((p) => p.geocodeStatus === 'failed').length ?? 0);
+
+	// --- Place search ---
+	let placeSearch = $state('');
+	let displayedPlaces = $derived.by(() => {
+		const list = localAncestry?.places ?? [];
+		if (!placeSearch.trim()) return list;
+		const q = placeSearch.trim().toLowerCase();
+		return list.filter((p) => p.name.toLowerCase().includes(q));
+	});
 
 	// --- Place geocode lookup state ---
 	let lookupPlaceId = $state(null);
@@ -647,7 +660,15 @@
 			{/if}
 
 			<!-- Places table -->
-			<h3 class="subsection-title">Places ({localAncestry.places.length})</h3>
+			<div class="places-header">
+				<h3 class="subsection-title">Places ({localAncestry.places.length})</h3>
+				<input
+					class="place-search"
+					type="search"
+					placeholder="Search places by name..."
+					bind:value={placeSearch}
+				/>
+			</div>
 			<div class="places-table">
 				<div class="table-header">
 					<span>Place</span>
@@ -657,8 +678,12 @@
 					<span>Status</span>
 					<span>Events</span>
 					<span></span>
+					<span></span>
 				</div>
-				{#each localAncestry.places as place (place.id)}
+				{#if displayedPlaces.length === 0 && placeSearch.trim()}
+					<div class="no-results">No places match "{placeSearch.trim()}"</div>
+				{/if}
+				{#each displayedPlaces as place (place.id)}
 					<div class="table-row" class:failed={place.geocodeStatus === 'failed'} class:lookup-active={lookupPlaceId === place.id}>
 						<span class="place-name" title={place.name}>{place.name}</span>
 						<span>{place.country || '—'}</span>
@@ -707,6 +732,11 @@
 						{/if}
 						<span>{place.events.length}</span>
 						<button class="lookup-btn" title="Look up coordinates" onclick={() => startLookup(place)} disabled={lookupPlaceId === place.id}>&#x1F50D;</button>
+						{#if place.geocodeStatus !== 'failed' && lookupPlaceId !== place.id}
+							<button class="clear-btn" title="Clear coordinates" onclick={() => clearPlaceCoords(place.id)}>&#10005;</button>
+						{:else}
+							<span></span>
+						{/if}
 					</div>
 				{/each}
 			</div>
@@ -1223,9 +1253,30 @@
 		overflow: hidden;
 		font-size: 0.8rem;
 	}
+	.places-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin-bottom: 12px;
+	}
+	.places-header .subsection-title {
+		margin: 0;
+	}
+	.place-search {
+		padding: 5px 10px;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		font-size: 0.8rem;
+		font-family: inherit;
+		width: 240px;
+	}
+	.place-search:focus {
+		outline: none;
+		border-color: var(--color-primary);
+	}
 	.table-header {
 		display: grid;
-		grid-template-columns: 2fr 1fr 80px 80px 80px 60px 32px;
+		grid-template-columns: 2fr 1fr 80px 80px 80px 60px 32px 32px;
 		gap: 8px;
 		padding: 8px 12px;
 		background: var(--color-bg);
@@ -1236,17 +1287,37 @@
 	}
 	.table-row {
 		display: grid;
-		grid-template-columns: 2fr 1fr 80px 80px 80px 60px 32px;
+		grid-template-columns: 2fr 1fr 80px 80px 80px 60px 32px 32px;
 		gap: 8px;
 		padding: 6px 12px;
 		border-top: 1px solid var(--color-border);
 		align-items: center;
 	}
 	.table-row.lookup-active {
-		grid-template-columns: 2fr 1fr 1fr 60px 32px;
+		grid-template-columns: 2fr 1fr 1fr 60px 32px 32px;
 	}
 	.table-row.failed {
 		background: #fdf0f0;
+	}
+	.no-results {
+		padding: 16px;
+		text-align: center;
+		color: var(--color-text-muted);
+		font-size: 0.85rem;
+	}
+	.clear-btn {
+		background: none;
+		border: 1px solid var(--color-border);
+		border-radius: 3px;
+		cursor: pointer;
+		font-size: 0.75rem;
+		padding: 2px 4px;
+		line-height: 1;
+		color: var(--color-danger);
+	}
+	.clear-btn:hover {
+		background: #fdf0f0;
+		border-color: var(--color-danger);
 	}
 	.place-name {
 		overflow: hidden;

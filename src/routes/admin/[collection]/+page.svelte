@@ -3,7 +3,7 @@
 	import PhotoEditor from '$lib/components/admin/PhotoEditor.svelte';
 	import AdminPhotoLightbox from '$lib/components/admin/AdminPhotoLightbox.svelte';
 	import DuplicateReview from '$lib/components/admin/DuplicateReview.svelte';
-	import { apiPost, apiDelete } from '$lib/api.js';
+	import { apiPost, apiPut, apiDelete } from '$lib/api.js';
 	import { invalidateAll } from '$app/navigation';
 	import Modal from '$lib/components/common/Modal.svelte';
 
@@ -156,6 +156,51 @@
 		const hadErrors = batchDeleteProgress.errors > 0;
 		setTimeout(() => {
 			batchDeleteProgress = null;
+			if (!hadErrors) {
+				selectMode = false;
+				selectedPhotos = new Set();
+			}
+		}, hadErrors ? 5000 : 2000);
+	}
+
+	// --- Clear GPS (batch) ---
+	let showClearGpsConfirm = $state(false);
+	let clearGpsProgress = $state(null);
+	let selectedWithGps = $derived(
+		[...selectedPhotos].filter((id) => {
+			const photo = photos.find((p) => p.id === id);
+			return photo && photo.gps != null;
+		}).length
+	);
+
+	async function batchClearGps() {
+		showClearGpsConfirm = false;
+		const ids = [...selectedPhotos].filter((id) => {
+			const photo = photos.find((p) => p.id === id);
+			return photo && photo.gps != null;
+		});
+		if (ids.length === 0) return;
+
+		clearGpsProgress = { current: 0, total: ids.length, errors: 0 };
+
+		for (let i = 0; i < ids.length; i++) {
+			const result = await apiPut('/api/photos', {
+				collection: data.collection.slug,
+				photoId: ids[i],
+				updates: { gps: null, gpsSource: null, locationName: null }
+			});
+
+			if (result.ok) {
+				handleUpdated(result.data.photo);
+			} else {
+				clearGpsProgress.errors++;
+			}
+			clearGpsProgress.current = i + 1;
+		}
+
+		const hadErrors = clearGpsProgress.errors > 0;
+		setTimeout(() => {
+			clearGpsProgress = null;
 			if (!hadErrors) {
 				selectMode = false;
 				selectedPhotos = new Set();
@@ -454,10 +499,24 @@
 							({batchDeleteProgress.errors} failed)
 						{/if}
 					</span>
+				{:else if clearGpsProgress}
+					<span class="batch-progress">
+						Clearing GPS... {clearGpsProgress.current}/{clearGpsProgress.total}
+						{#if clearGpsProgress.errors > 0}
+							({clearGpsProgress.errors} failed)
+						{/if}
+					</span>
 				{:else if selectedCount > 0}
-					<button class="btn btn-danger btn-sm" onclick={() => showBatchDeleteConfirm = true}>
-						Delete Selected ({selectedCount})
-					</button>
+					<div class="batch-bar-right">
+						{#if selectedWithGps > 0}
+							<button class="btn btn-outline btn-sm" onclick={() => showClearGpsConfirm = true}>
+								Clear GPS ({selectedWithGps})
+							</button>
+						{/if}
+						<button class="btn btn-danger btn-sm" onclick={() => showBatchDeleteConfirm = true}>
+							Delete Selected ({selectedCount})
+						</button>
+					</div>
 				{/if}
 			</div>
 		{/if}
@@ -528,6 +587,18 @@
 	{#snippet actions()}
 		<button class="btn btn-outline btn-sm" onclick={() => showBatchDeleteConfirm = false}>Cancel</button>
 		<button class="btn btn-danger btn-sm" onclick={batchDelete}>Delete {selectedCount} Photos</button>
+	{/snippet}
+</Modal>
+
+<Modal title="Clear GPS Data" show={showClearGpsConfirm} onclose={() => showClearGpsConfirm = false}>
+	<p>Clear GPS coordinates from <strong>{selectedWithGps}</strong> photo{selectedWithGps !== 1 ? 's' : ''}?</p>
+	<p style="font-size: 0.8rem; color: var(--color-text-muted);">
+		This removes GPS coordinates, source, and location name. Photos with EXIF GPS will lose their original coordinates.
+		After clearing, use the Geo-Tag page to assign new coordinates.
+	</p>
+	{#snippet actions()}
+		<button class="btn btn-outline btn-sm" onclick={() => showClearGpsConfirm = false}>Cancel</button>
+		<button class="btn btn-danger btn-sm" onclick={batchClearGps}>Clear GPS ({selectedWithGps})</button>
 	{/snippet}
 </Modal>
 
@@ -693,6 +764,11 @@
 		display: flex;
 		align-items: center;
 		gap: 10px;
+	}
+	.batch-bar-right {
+		display: flex;
+		align-items: center;
+		gap: 8px;
 	}
 	.btn-xs {
 		padding: 3px 8px;
