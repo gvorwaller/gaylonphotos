@@ -199,7 +199,60 @@ Final Status: CLEAN
 
 ---
 
-## Step 4: Pre-Commit Summary & User Approval
+## Step 4: Codex Cross-Review (Independent Second Opinion)
+
+**When to run:** After Step 3.5 completes and all Claude-side review rounds are done.
+
+This step sends the reviewed files to OpenAI Codex (GPT-5.4) for an **independent cross-review** — a completely separate AI with no knowledge of the prior review rounds. This catches blind spots that Claude's adversarial loop may share due to common training biases.
+
+**Invoke the `codex:codex-rescue` agent** with a task prompt structured as follows:
+
+> Review the following files for bugs, type safety issues, async/await correctness, null propagation, and security concerns. These files were just modified during an adversarial review cycle — your job is to find anything the prior reviewers missed.
+>
+> **Files to review:** [list all files modified during the review cycle, plus any files they directly consume or are consumed by]
+>
+> **Repository context:** Svelte frontend application (no database). Focus on reactivity correctness, store subscriptions, lifecycle issues, and Svelte-specific patterns (`$:` reactive declarations, `onMount`/`onDestroy` cleanup, component binding edge cases). Read the project's CLAUDE.md for additional context.
+>
+> **Output format — use this exact structure:**
+> ```
+> ## P1 CRITICAL (Must fix before commit)
+> [Each issue: file:line, description, evidence from source code]
+>
+> ## P2 IMPORTANT (Should fix)
+> [Each issue: file:line, description, evidence from source code]
+>
+> ## P3 NITPICK (Consider fixing)
+> [Each issue: file:line, description, evidence from source code]
+>
+> ## VERIFIED CORRECT
+> [Things you checked and confirmed are actually right — include file:line references]
+>
+> TOTAL: X P1, Y P2, Z P3
+> ```
+>
+> Be grounded: every finding must cite the specific file and line number, and explain what the actual bug or risk is with evidence from the source. Do not speculate without reading the code.
+
+**After the Codex agent returns**, analyze the findings:
+
+1. **For each P1/P2 finding**: Read the cited source code yourself. Determine if the issue is REAL or a FALSE POSITIVE.
+2. **Fix all confirmed REAL issues** — minimal correct fixes only.
+3. **Dismiss false positives** with a brief explanation.
+4. **Do NOT re-run the full Claude adversarial loop** — Codex findings are already grounded with citations. Just fix and verify.
+
+Display the Codex cross-review results as part of the scoreboard:
+
+```
+Review Round N: 0 P1, 0 P2, 0 P3 → CLEAN
+Sanity Validation: X false positives dismissed, Y real fixes applied, fix integrity PASS
+Codex Cross-Review: A P1, B P2, C P3 found → D real, E false positives → Fixed D
+Final Status: CLEAN
+```
+
+**If Codex is unavailable** (not installed, not authenticated, or the run fails): skip this step and note it in the final summary. Do not block the review on Codex availability.
+
+---
+
+## Step 5: Pre-Commit Summary & User Approval
 
 **Do NOT commit automatically.** Present the user with:
 
@@ -207,13 +260,14 @@ Final Status: CLEAN
 ## Review Complete — Ready for Commit
 
 ### Scope: [branch/uncommitted]
-### Rounds: N review-fix cycles to reach clean
+### Rounds: N review-fix cycles to reach clean (+ Codex cross-review)
 
 ### Files Modified:
 [list all files that were changed during remediation]
 
 ### Summary of All Fixes Applied:
 [grouped by category: return values, type safety, null handling, async/await, etc.]
+[note which fixes came from Codex cross-review vs Claude adversarial rounds]
 
 ### Final Review Status: CLEAN (0 P1, 0 P2, 0 P3)
 
