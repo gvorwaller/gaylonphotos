@@ -17,6 +17,7 @@
 	let assigning = $state(false);
 	let error = $state('');
 	let filter = $state('failed'); // 'failed', 'all'
+	let placeSearch = $state('');
 
 	// Initialize from prop
 	$effect(() => {
@@ -26,10 +27,15 @@
 	});
 
 	let filteredPlaces = $derived.by(() => {
+		let result = places;
 		if (filter === 'failed') {
-			return places.filter((p) => p.geocodeStatus === 'failed');
+			result = result.filter((p) => p.geocodeStatus === 'failed');
 		}
-		return places;
+		if (placeSearch.trim()) {
+			const q = placeSearch.trim().toLowerCase();
+			result = result.filter((p) => p.name.toLowerCase().includes(q));
+		}
+		return result;
 	});
 
 	let failedCount = $derived(places.filter((p) => p.geocodeStatus === 'failed').length);
@@ -146,13 +152,22 @@
 			</div>
 		</div>
 
+		<div class="search-bar">
+			<input
+				class="search-input"
+				type="search"
+				placeholder="Search places by name..."
+				bind:value={placeSearch}
+			/>
+		</div>
+
 		{#if error}
 			<div class="geotagger-error">{error}</div>
 		{/if}
 
 		{#if filteredPlaces.length === 0}
 			<div class="geotagger-done">
-				{filter === 'failed' ? 'All places have been resolved!' : 'No places found.'}
+				{placeSearch.trim() ? `No places match "${placeSearch.trim()}"` : filter === 'failed' ? 'All places have been resolved!' : 'No places found.'}
 			</div>
 		{:else}
 			<div class="place-list">
@@ -266,6 +281,24 @@
 		background: var(--color-primary);
 		color: #fff;
 		border-color: var(--color-primary);
+	}
+	.search-bar {
+		padding: 8px;
+		border-bottom: 1px solid var(--color-border);
+		flex-shrink: 0;
+	}
+	.search-input {
+		width: 100%;
+		padding: 6px 10px;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		font-size: 0.8rem;
+		font-family: inherit;
+		outline: none;
+	}
+	.search-input:focus {
+		border-color: var(--color-primary);
+		box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.15);
 	}
 	.geotagger-error {
 		background: #fdf0f0;
