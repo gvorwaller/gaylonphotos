@@ -14,6 +14,7 @@
 		visibleIds = new Set(),
 		locatedIds = new Set(),
 		selectedRoot = 'primary',
+		focusPerson = null,
 		onselect = () => {},
 		ongoto = () => {}
 	} = $props();
@@ -90,13 +91,38 @@
 	// ─── Root label ─────────────────────────────────
 	let rootLabel = $derived(selectedRoot === 'primary' ? 'Self' : 'Wife');
 
+	// ─── Focus (re-root) support ────────────────────
+	let focusBranchKey = $derived(
+		focusPerson ? branchKeyFromLineagePath(focusPerson.lineagePath, rootLabel) : null
+	);
+	let focusGenOffset = $derived(focusPerson ? focusPerson.generation : 0);
+
 	// ─── Build nodes ────────────────────────────────
 	let nodes = $derived.by(() => {
 		const q = searchQuery?.toLowerCase() || '';
+		const prefix = focusBranchKey;
+		const genOff = focusGenOffset;
+
 		return persons
-			.filter((p) => p.generation <= maxGen)
-			.map((p) => {
+			.filter((p) => {
 				const bk = branchKeyFromLineagePath(p.lineagePath, rootLabel);
+				if (prefix) {
+					// Only include the focused person and their ancestors
+					if (bk !== prefix && !bk.startsWith(prefix + '.')) return false;
+					return (p.generation - genOff) <= maxGen;
+				}
+				return p.generation <= maxGen;
+			})
+			.map((p) => {
+				let bk = branchKeyFromLineagePath(p.lineagePath, rootLabel);
+				let gen = p.generation;
+
+				// Remap branchKey and generation when focused
+				if (prefix) {
+					bk = bk === prefix ? 'root' : 'root' + bk.slice(prefix.length);
+					gen = p.generation - genOff;
+				}
+
 				const parts = bk.split('.');
 				const parentKey = parts.length > 1 ? parts.slice(0, -1).join('.') : null;
 				const lastSeg = parts[parts.length - 1];
@@ -104,7 +130,7 @@
 				return {
 					id: p.id,
 					person: p,
-					generation: p.generation,
+					generation: gen,
 					branchKey: bk,
 					parentKey,
 					side,
@@ -208,16 +234,24 @@
 	let hiddenMatches = $derived.by(() => {
 		if (!searchQuery) return 0;
 		const q = searchQuery.toLowerCase();
-		return persons.filter(
-			(p) =>
-				p.generation > maxGen &&
+		const prefix = focusBranchKey;
+		const genOff = focusGenOffset;
+		return persons.filter((p) => {
+			if (prefix) {
+				const bk = branchKeyFromLineagePath(p.lineagePath, rootLabel);
+				if (bk !== prefix && !bk.startsWith(prefix + '.')) return false;
+			}
+			const gen = p.generation - genOff;
+			return gen > maxGen &&
 				(p.name.toLowerCase().includes(q) ||
-					(p.facts || []).some((f) => f.place && f.place.toLowerCase().includes(q)))
-		).length;
+					(p.facts || []).some((f) => f.place && f.place.toLowerCase().includes(q)));
+		}).length;
 	});
 
 	// ─── Root person name for aria ──────────────────
-	let rootPersonName = $derived(nodes.find((n) => n.branchKey === 'root')?.person?.name || 'Unknown');
+	let rootPersonName = $derived(
+		focusPerson?.name || nodes.find((n) => n.branchKey === 'root')?.person?.name || 'Unknown'
+	);
 
 	function handleKey(e, id) {
 		if (e.key === 'Enter' || e.key === ' ') {
@@ -256,11 +290,13 @@
 				{@const suppressMuting = searchGlobal && searchQuery}
 				{@const isMuted = !suppressMuting && !node.inViewport && !isSelected}
 				{@const isMatch = node.matchesSearch}
+				{@const isFocusRoot = focusPerson && node.branchKey === 'root'}
 				<g
 					class="pedigree-node"
 					class:muted={isMuted}
 					class:selected={isSelected}
 					class:search-match={isMatch}
+					class:focus-root={isFocusRoot}
 					transform="translate({node.x}, {node.y})"
 					role="button"
 					tabindex="0"
@@ -367,6 +403,11 @@
 		fill: #fefce8;
 		stroke: #ca8a04;
 		stroke-width: 1.5;
+	}
+	.pedigree-node.focus-root .node-rect {
+		fill: #fefce8;
+		stroke: #ca8a04;
+		stroke-width: 2;
 	}
 	.pedigree-node.muted {
 		opacity: 0.4;

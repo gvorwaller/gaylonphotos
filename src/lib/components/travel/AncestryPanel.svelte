@@ -22,6 +22,8 @@
 	// ─── Tree tab state ─────────────────────────────
 	let treeRoot = $state('primary');
 	let treeMaxGen = $state(5);
+	let treeFocusPerson = $state(null);
+	let treeFocusSearch = $state('');
 
 	let primaryTreePersons = $derived(
 		(ancestry?.persons || []).filter((p) => !p.lineage?.startsWith('wife-'))
@@ -35,10 +37,26 @@
 	);
 	let treeMaxGenLabel = $derived(generationLabel(treeMaxGen));
 
-	// Clamp treeMaxGen when switching roots
+	// Focus-aware max generation for depth slider
+	let focusedMaxGen = $derived(
+		treeFocusPerson ? treeActualMaxGen - treeFocusPerson.generation : treeActualMaxGen
+	);
+
+	// Search results for focus picker (tree tab only)
+	let treeSearchResults = $derived.by(() => {
+		if (!treeFocusSearch) return [];
+		const q = treeFocusSearch.toLowerCase();
+		return treePersons
+			.filter((p) => p.name.toLowerCase().includes(q))
+			.sort((a, b) => a.generation - b.generation)
+			.slice(0, 20);
+	});
+
+	// Clamp treeMaxGen when switching roots or focus
 	$effect(() => {
-		if (treeMaxGen > treeActualMaxGen && treeActualMaxGen > 0) {
-			treeMaxGen = treeActualMaxGen;
+		const max = focusedMaxGen;
+		if (treeMaxGen > max && max > 0) {
+			treeMaxGen = max;
 		}
 	});
 
@@ -310,6 +328,19 @@
 			ongotolocation({ lat: place.lat, lng: place.lng, zoom: 12, _ts: Date.now() });
 		}
 	}
+
+	function focusOnPerson(person) {
+		treeFocusPerson = person;
+		treeFocusSearch = '';
+		// Reset depth to a reasonable default for the focused subtree
+		const max = treeActualMaxGen - person.generation;
+		treeMaxGen = Math.min(5, max > 0 ? max : 5);
+	}
+
+	function clearTreeFocus() {
+		treeFocusPerson = null;
+		treeFocusSearch = '';
+	}
 </script>
 
 <div class="ancestry-panel">
@@ -548,15 +579,54 @@
 						{#if hasWifeLines}
 							<div class="tree-toggle">
 								<button class="scope-btn" class:active={treeRoot === 'primary'}
-									onclick={() => (treeRoot = 'primary')}>{primaryName || 'Primary'}'s Tree</button>
+									onclick={() => { treeRoot = 'primary'; clearTreeFocus(); }}>{primaryName || 'Primary'}'s Tree</button>
 								<button class="scope-btn" class:active={treeRoot === 'wife'}
-									onclick={() => (treeRoot = 'wife')}>{mergedName || 'Spouse'}'s Tree</button>
+									onclick={() => { treeRoot = 'wife'; clearTreeFocus(); }}>{mergedName || 'Spouse'}'s Tree</button>
 							</div>
 						{/if}
 						<label class="gen-slider-label">
 							Depth: {treeMaxGen} &mdash; {treeMaxGenLabel}
-							<input type="range" class="gen-slider" min={3} max={treeActualMaxGen} bind:value={treeMaxGen} />
+							<input type="range" class="gen-slider" min={3} max={focusedMaxGen} bind:value={treeMaxGen} />
 						</label>
+					</div>
+					<!-- Focus ancestor picker / chip -->
+					<div class="tree-focus-row">
+						{#if !treeFocusPerson}
+							<div class="tree-focus-picker">
+								<input
+									type="text"
+									class="tree-focus-input"
+									placeholder="Focus on an ancestor..."
+									bind:value={treeFocusSearch}
+									onfocusin={() => {}}
+									onblur={() => { setTimeout(() => { treeFocusSearch = treeFocusSearch; }, 200); }}
+								/>
+								{#if treeFocusSearch && treeSearchResults.length > 0}
+									<div class="tree-focus-dropdown">
+										{#each treeSearchResults as person (person.id)}
+											<button
+												type="button"
+												class="tree-focus-option"
+												onmousedown={() => focusOnPerson(person)}
+											>
+												<span class="option-name">{person.name}</span>
+												<span class="option-detail">
+													{person.birthYear ? `b. ${person.birthYear}` : ''}
+													{#if person.generation > 0}&middot; Gen {person.generation}{/if}
+												</span>
+											</button>
+										{/each}
+									</div>
+								{/if}
+							</div>
+						{:else}
+							<div class="tree-focus-chip">
+								<span class="focus-chip-label">Showing:</span>
+								<strong class="focus-chip-name">{treeFocusPerson.name}</strong>
+								<span class="focus-chip-detail">Gen {treeFocusPerson.generation}</span>
+								<button class="focus-chip-clear" onclick={() => clearTreeFocus()} title="Show full tree">&times;</button>
+							</div>
+						{/if}
 					</div>
 					<PedigreeTree
 						persons={treePersons}
@@ -567,6 +637,7 @@
 						visibleIds={treeVisibleIds}
 						locatedIds={treeLocatedIds}
 						selectedRoot={treeRoot}
+						focusPerson={treeFocusPerson}
 						onselect={(id) => togglePerson(id)}
 						ongoto={(person) => gotoPersonLocation(person)}
 					/>
@@ -1197,11 +1268,115 @@
 	.tree-detail-anchor {
 		margin-top: 8px;
 	}
+
+	/* ─── Tree Focus Picker ──────────────────────── */
+	.tree-focus-row {
+		margin-bottom: 10px;
+	}
+	.tree-focus-picker {
+		position: relative;
+		max-width: 340px;
+	}
+	.tree-focus-input {
+		width: 100%;
+		padding: 6px 12px;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		font-size: 0.82rem;
+		font-family: inherit;
+		outline: none;
+	}
+	.tree-focus-input:focus {
+		border-color: var(--color-primary);
+	}
+	.tree-focus-dropdown {
+		position: absolute;
+		top: 100%;
+		left: 0;
+		right: 0;
+		max-height: 220px;
+		overflow-y: auto;
+		background: #fff;
+		border: 1px solid var(--color-border);
+		border-top: none;
+		border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+		z-index: 100;
+	}
+	.tree-focus-option {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 8px;
+		width: 100%;
+		padding: 7px 12px;
+		border: none;
+		background: none;
+		cursor: pointer;
+		font-size: 0.82rem;
+		text-align: left;
+		font-family: inherit;
+	}
+	.tree-focus-option:hover {
+		background: var(--color-bg);
+	}
+	.option-name {
+		font-weight: 600;
+	}
+	.option-detail {
+		font-size: 0.72rem;
+		color: var(--color-text-muted);
+		flex-shrink: 0;
+	}
+
+	/* ─── Tree Focus Chip ────────────────────────── */
+	.tree-focus-chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		padding: 5px 10px;
+		background: #fefce8;
+		border: 1px solid #fde68a;
+		border-radius: var(--radius-sm);
+		font-size: 0.82rem;
+		max-width: 100%;
+	}
+	.focus-chip-label {
+		color: var(--color-text-muted);
+		flex-shrink: 0;
+	}
+	.focus-chip-name {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.focus-chip-detail {
+		color: var(--color-text-muted);
+		font-size: 0.7rem;
+		flex-shrink: 0;
+	}
+	.focus-chip-clear {
+		background: none;
+		border: none;
+		font-size: 1.1rem;
+		color: var(--color-text-muted);
+		cursor: pointer;
+		padding: 0 2px;
+		line-height: 1;
+		flex-shrink: 0;
+	}
+	.focus-chip-clear:hover {
+		color: var(--color-text);
+	}
+
 	@media (max-width: 640px) {
 		.tree-controls {
 			flex-direction: column;
 			align-items: flex-start;
 			gap: 8px;
+		}
+		.tree-focus-picker {
+			max-width: 100%;
 		}
 	}
 
