@@ -13,14 +13,17 @@ export async function load({ params }) {
 
 	const photos = await listPhotos(params.collection);
 
-	// Load itinerary and ancestry for travel collections
+	// Load itinerary for travel collections; ancestry only if enabled
 	let itinerary = null;
 	let ancestry = null;
 	if (collection.type === 'travel') {
-		[itinerary, ancestry] = await Promise.all([
-			getItinerary(params.collection),
-			getAncestry(params.collection)
-		]);
+		const promises = [getItinerary(params.collection)];
+		if (collection.showAncestry) {
+			promises.push(getAncestry(params.collection));
+		}
+		const results = await Promise.all(promises);
+		itinerary = results[0];
+		ancestry = results[1] ?? null;
 	}
 
 	return { collection, photos, itinerary, ancestry };

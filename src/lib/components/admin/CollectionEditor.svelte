@@ -14,6 +14,7 @@
 	let newName = $state('');
 	let newType = $state('travel');
 	let newDesc = $state('');
+	let newShowAncestry = $state(false);
 	let createError = $state('');
 	let creating = $state(false);
 
@@ -21,6 +22,8 @@
 	let editSlug = $state(null);
 	let editName = $state('');
 	let editDesc = $state('');
+	let editShowAncestry = $state(false);
+	let editType = $state('');
 	let editError = $state('');
 	let saving = $state(false);
 
@@ -40,13 +43,14 @@
 			slug: newSlug,
 			name: newName,
 			type: newType,
-			description: newDesc
+			description: newDesc,
+			...(newType === 'travel' ? { showAncestry: newShowAncestry } : {})
 		});
 
 		creating = false;
 		if (result.ok) {
 			showCreate = false;
-			newSlug = ''; newName = ''; newType = 'travel'; newDesc = '';
+			newSlug = ''; newName = ''; newType = 'travel'; newDesc = ''; newShowAncestry = false;
 			oncreated?.(result.data.collection);
 		} else {
 			createError = result.error;
@@ -57,6 +61,8 @@
 		editSlug = c.slug;
 		editName = c.name;
 		editDesc = c.description;
+		editType = c.type;
+		editShowAncestry = c.showAncestry ?? false;
 		editError = '';
 	}
 
@@ -64,9 +70,13 @@
 		saving = true;
 		editError = '';
 
+		const updates = { name: editName, description: editDesc };
+		if (editType === 'travel') {
+			updates.showAncestry = editShowAncestry;
+		}
 		const result = await apiPut('/api/collections', {
 			slug: editSlug,
-			updates: { name: editName, description: editDesc }
+			updates
 		});
 
 		saving = false;
@@ -106,6 +116,12 @@
 						{/if}
 						<input type="text" bind:value={editName} placeholder="Name" />
 						<textarea bind:value={editDesc} rows="2" placeholder="Description"></textarea>
+						{#if editType === 'travel'}
+							<label class="field-checkbox">
+								<input type="checkbox" bind:checked={editShowAncestry} />
+								<span>Include Family History section</span>
+							</label>
+						{/if}
 						<div class="edit-actions">
 							<button class="btn btn-primary btn-sm" onclick={handleSaveEdit} disabled={saving}>
 								{saving ? 'Saving...' : 'Save'}
@@ -161,6 +177,12 @@
 			<span>Description</span>
 			<textarea bind:value={newDesc} rows="2"></textarea>
 		</label>
+		{#if newType === 'travel'}
+			<label class="field-checkbox">
+				<input type="checkbox" bind:checked={newShowAncestry} />
+				<span>Include Family History section</span>
+			</label>
+		{/if}
 	</div>
 	{#snippet actions()}
 		<button class="btn btn-outline btn-sm" onclick={() => showCreate = false}>Cancel</button>
@@ -258,6 +280,19 @@
 		border-radius: var(--radius-sm);
 		font-size: 0.9rem;
 		font-family: inherit;
+	}
+	.field-checkbox {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		cursor: pointer;
+	}
+	.field-checkbox span {
+		font-size: 0.85rem;
+		color: var(--color-text);
+	}
+	.field-checkbox input[type='checkbox'] {
+		accent-color: var(--color-primary);
 	}
 	.field-error {
 		background: #fdf0f0;

@@ -38,7 +38,8 @@ export async function POST({ request }) {
 		const collection = await createCollection({
 			slug, name, type, description,
 			heroImage: body.heroImage,
-			dateRange: body.dateRange
+			dateRange: body.dateRange,
+			showAncestry: body.showAncestry
 		});
 		return json({ collection }, { status: 201 });
 	} catch (err) {

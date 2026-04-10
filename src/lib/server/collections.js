@@ -65,7 +65,10 @@ export async function createCollection(collectionData) {
 		type,
 		description: description || '',
 		heroImage: collectionData.heroImage || null,
-		...(type === 'travel' ? { dateRange: collectionData.dateRange || { start: null, end: null } } : {})
+		...(type === 'travel' ? {
+			dateRange: collectionData.dateRange || { start: null, end: null },
+			showAncestry: collectionData.showAncestry ?? false
+		} : {})
 	};
 
 	// Ensure collections.json exists (atomic — prevents TOCTOU race on fresh install)
