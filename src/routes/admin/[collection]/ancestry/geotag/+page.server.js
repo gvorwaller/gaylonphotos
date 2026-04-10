@@ -11,6 +11,9 @@ export async function load({ params }) {
 	if (collection.type !== 'travel') {
 		throw error(400, 'Ancestry is only for travel collections');
 	}
+	if (!collection.showAncestry) {
+		throw error(400, 'Ancestry is not enabled for this collection');
+	}
 
 	const ancestry = await getAncestry(params.collection);
 	if (!ancestry) {

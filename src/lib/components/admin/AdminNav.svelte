@@ -78,9 +78,11 @@
 							<a href="/admin/{c.slug}/itinerary" class="nav-sublink" class:active={isActive(`/admin/${c.slug}/itinerary`)}>
 								Itinerary
 							</a>
-							<a href="/admin/{c.slug}/ancestry" class="nav-sublink" class:active={isActive(`/admin/${c.slug}/ancestry`)}>
-								Ancestry
-							</a>
+							{#if c.showAncestry}
+								<a href="/admin/{c.slug}/ancestry" class="nav-sublink" class:active={isActive(`/admin/${c.slug}/ancestry`)}>
+									Ancestry
+								</a>
+							{/if}
 						{/if}
 					</div>
 				</div>
