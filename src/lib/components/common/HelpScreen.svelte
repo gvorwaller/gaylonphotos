@@ -125,12 +125,14 @@
 						<div class="tab-card">
 							<strong>Family Tree</strong>
 							<p>A visual tree diagram showing how ancestors connect. Use the <strong>depth slider</strong> to show more or fewer generations. If both husband and wife ancestry data is available, you can switch between the two family trees using the toggle at the top.</p>
+							<p><strong>Focus on an ancestor:</strong> Use the <strong>"Focus on an ancestor..."</strong> search box below the tree controls to find a specific person. Tap their name in the dropdown to <strong>re-root the tree</strong> on that person — the tree will show only their direct ancestors, making it much easier to explore a single family line (especially on a phone). A yellow chip shows who you're focused on; tap the <strong>✕</strong> to return to the full tree.</p>
 						</div>
 
 						<h4>Searching for Someone</h4>
 						<ul>
-							<li>Use the <strong>search box</strong> at the top of the panel to find a specific ancestor by name or place.</li>
+							<li>Use the <strong>search box</strong> at the top of the panel to find a specific ancestor by name or place. Matching names are highlighted across all tabs.</li>
 							<li>By default, search looks within the current map view. Tap <strong>"All"</strong> to search across all ancestors regardless of the map.</li>
+							<li>On the <strong>Family Tree</strong> tab, there's a separate <strong>"Focus on an ancestor..."</strong> field that lets you re-root the entire tree on one person — great for exploring your own branch of the family.</li>
 						</ul>
 
 						<h4>Connecting to the Map</h4>
