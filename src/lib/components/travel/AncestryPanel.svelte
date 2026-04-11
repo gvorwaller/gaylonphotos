@@ -13,7 +13,7 @@
 
 	let { ancestry = { persons: [], places: [] }, collectionSlug = '', mapBounds = null, ongotolocation = null } = $props();
 
-	let expanded = $state(false);
+	let expanded = $state(true);
 	let activeTab = $state('place');
 	let expandedPersonId = $state(null);
 	let ancestorSearch = $state('');
@@ -343,7 +343,7 @@
 	}
 </script>
 
-<div class="ancestry-panel">
+<div class="ancestry-panel" id="family-heritage">
 	<button class="ancestry-header" onclick={() => (expanded = !expanded)} aria-expanded={expanded}>
 		<span class="ancestry-chevron">{expanded ? '\u25BE' : '\u25B8'}</span>
 		<h2 class="section-label" style="margin-bottom: 0;">Family Heritage</h2>
@@ -799,9 +799,9 @@
 	/* ─── Tabs ───────────────────────────────────── */
 	.ancestry-tabs {
 		display: flex;
-		gap: 0;
-		border-bottom: 1px solid var(--color-border);
-		padding: 0 20px;
+		gap: 4px;
+		border-bottom: 2px solid var(--color-border);
+		padding: 0 16px;
 		overflow-x: auto;
 		-webkit-overflow-scrolling: touch;
 		scrollbar-width: none;
@@ -810,30 +810,35 @@
 		display: none;
 	}
 	.ancestry-tab {
-		padding: 10px 16px;
-		background: none;
-		border: none;
-		border-bottom: 2px solid transparent;
+		padding: 9px 16px;
+		background: var(--color-bg, #f8f9fa);
+		border: 1px solid var(--color-border);
+		border-bottom: none;
+		border-radius: 6px 6px 0 0;
 		font-family: inherit;
 		font-size: 0.8rem;
 		font-weight: 600;
 		color: var(--color-text-muted);
 		cursor: pointer;
-		transition: color 0.15s, border-color 0.15s;
+		transition: color 0.15s, background 0.15s;
 		white-space: nowrap;
+		margin-bottom: -2px;
 	}
 	@media (max-width: 480px) {
 		.ancestry-tab {
-			padding: 10px 10px;
+			padding: 9px 10px;
 			font-size: 0.75rem;
 		}
 	}
 	.ancestry-tab:hover {
 		color: var(--color-text);
+		background: #fff;
 	}
 	.ancestry-tab.active {
 		color: var(--color-primary);
-		border-bottom-color: var(--color-primary);
+		background: #fff;
+		border-color: var(--color-border);
+		border-bottom: 2px solid #fff;
 	}
 
 	/* ─── Search Bar ────────────────────────────── */
