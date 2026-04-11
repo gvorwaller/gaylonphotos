@@ -33,6 +33,7 @@
 	let displayLocation = $derived(photo.locationName || resolvedLocationName);
 
 	let description = $state('');
+	let links = $state([]);
 	let tagsStr = $state('');
 	let favorite = $state(false);
 	let species = $state('');
@@ -42,6 +43,7 @@
 	// Re-sync local state when photo prop changes (e.g. after save or navigation)
 	$effect(() => {
 		description = photo?.description ?? '';
+		links = (photo?.links || []).map((l) => ({ ...l }));
 		tagsStr = (photo?.tags || []).join(', ');
 		favorite = !!photo?.favorite;
 		species = photo?.species || '';
@@ -61,6 +63,7 @@
 
 		const updates = {
 			description,
+			links: links.filter((l) => l.url && l.label),
 			tags: tagsStr.split(',').map((t) => t.trim()).filter(Boolean),
 			favorite
 		};
@@ -169,6 +172,18 @@
 			<span>Description</span>
 			<textarea bind:value={description} rows="2"></textarea>
 		</label>
+
+		<div class="field">
+			<span class="field-label">Links</span>
+			{#each links as link, i}
+				<div class="link-row">
+					<input type="text" bind:value={link.label} placeholder="Label" class="link-label-input" />
+					<input type="url" bind:value={link.url} placeholder="https://..." class="link-url-input" />
+					<button type="button" class="btn btn-danger btn-sm link-remove" onclick={() => { links = links.filter((_, j) => j !== i); }}>&times;</button>
+				</div>
+			{/each}
+			<button type="button" class="btn btn-outline btn-sm" onclick={() => { links = [...links, { url: '', label: '' }]; }}>+ Add Link</button>
+		</div>
 
 		<label class="field">
 			<span>Tags (comma-separated)</span>
@@ -331,6 +346,40 @@
 		align-items: center;
 		gap: 6px;
 		font-size: 0.85rem;
+	}
+	.field-label {
+		font-size: 0.8rem;
+		font-weight: 600;
+		color: var(--color-text-muted);
+		display: block;
+		margin-bottom: 4px;
+	}
+	.link-row {
+		display: flex;
+		gap: 6px;
+		margin-bottom: 6px;
+	}
+	.link-label-input {
+		width: 120px;
+		flex-shrink: 0;
+		padding: 6px 8px;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		font-size: 0.82rem;
+		font-family: inherit;
+	}
+	.link-url-input {
+		flex: 1;
+		min-width: 0;
+		padding: 6px 8px;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		font-size: 0.82rem;
+		font-family: inherit;
+	}
+	.link-remove {
+		padding: 4px 8px;
+		line-height: 1;
 	}
 	.field-error {
 		background: #fdf0f0;

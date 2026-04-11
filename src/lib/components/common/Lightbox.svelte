@@ -152,6 +152,15 @@
 			{#if displayPhoto.description}
 				<p class="lightbox-desc">{displayPhoto.description}</p>
 			{/if}
+			{#if displayPhoto.links?.length > 0}
+				<div class="lightbox-links">
+					{#each displayPhoto.links as link}
+						<a href={link.url} class="lightbox-link" target="_blank" rel="noopener noreferrer">
+							{link.label} &rarr;
+						</a>
+					{/each}
+				</div>
+			{/if}
 			<div class="lightbox-meta">
 				{#if displayPhoto.duration}
 					<span>{Math.floor(displayPhoto.duration / 60)}:{String(displayPhoto.duration % 60).padStart(2, '0')}</span>
@@ -267,6 +276,21 @@
 		color: #fff;
 		margin-bottom: 8px;
 		font-size: 0.95rem;
+	}
+	.lightbox-links {
+		display: flex;
+		gap: 16px;
+		justify-content: center;
+		margin-bottom: 8px;
+	}
+	.lightbox-link {
+		color: #28a745;
+		text-decoration: none;
+		font-weight: 600;
+		font-size: 0.88rem;
+	}
+	.lightbox-link:hover {
+		text-decoration: underline;
 	}
 	.lightbox-meta {
 		display: flex;
