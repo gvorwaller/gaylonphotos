@@ -136,6 +136,16 @@
 			<p class="photo-description">{photo.description}</p>
 		{/if}
 
+		{#if photo.links?.length > 0}
+			<div class="photo-links">
+				{#each photo.links as link}
+					<a href={link.url} class="photo-link" target="_blank" rel="noopener noreferrer">
+						{link.label} &rarr;
+					</a>
+				{/each}
+			</div>
+		{/if}
+
 		{#if photo.tags?.length > 0}
 			<div class="photo-tags">
 				{#each photo.tags as tag}
@@ -252,6 +262,20 @@
 		font-size: 0.95rem;
 		line-height: 1.5;
 		color: var(--color-text);
+	}
+	.photo-links {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+	}
+	.photo-link {
+		font-size: 0.88rem;
+		color: var(--color-primary);
+		text-decoration: none;
+		font-weight: 500;
+	}
+	.photo-link:hover {
+		text-decoration: underline;
 	}
 	.photo-tags {
 		display: flex;
