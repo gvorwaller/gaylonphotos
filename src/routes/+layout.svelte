@@ -54,6 +54,15 @@
 				<span class="menu-link-name">{col.name}</span>
 				<span class="menu-link-type">{col.type}</span>
 			</a>
+			{#if col.showAncestry}
+				<a
+					href="/{col.slug}#family-heritage"
+					class="menu-link menu-sublink"
+					class:active={currentPath === `/${col.slug}` && false}
+				>
+					<span class="menu-link-name">Family Heritage</span>
+				</a>
+			{/if}
 		{:else}
 			<div class="menu-empty">No collections yet</div>
 		{/each}
@@ -182,6 +191,14 @@
 		font-size: 0.75rem;
 		color: var(--color-text-muted);
 		text-transform: capitalize;
+	}
+	.menu-sublink {
+		padding-left: 40px;
+		font-size: 0.82rem;
+		color: var(--color-text-muted);
+	}
+	.menu-sublink .menu-link-name {
+		font-weight: 400;
 	}
 	.menu-empty {
 		padding: 16px 20px;
