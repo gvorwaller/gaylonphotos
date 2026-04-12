@@ -64,7 +64,7 @@
 	});
 
 	function formatDateRange(arrival, departure) {
-		const opts = { month: 'short', day: 'numeric' };
+		const opts = { month: 'short', day: 'numeric', timeZone: 'UTC' };
 		const a = arrival ? new Date(arrival).toLocaleDateString('en-US', opts) : null;
 		const d = departure ? new Date(departure).toLocaleDateString('en-US', opts) : null;
 		if (a && d) return `${a} – ${d}`;
