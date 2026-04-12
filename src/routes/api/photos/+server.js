@@ -1,6 +1,51 @@
 import { json } from '@sveltejs/kit';
 import { listPhotos, processAndUpload, processAndUploadVideo, updatePhotoMetadata, deletePhoto } from '$lib/server/photos.js';
 import { getCollection } from '$lib/server/collections.js';
+import { describePhoto } from '$lib/server/describe.js';
+import { generateEmbedding, buildEmbeddingText, loadEmbeddings, invalidateCache } from '$lib/server/embeddings.js';
+import { readJson, updateJson } from '$lib/server/json-store.js';
+import fs from 'fs';
+import path from 'path';
+
+/**
+ * Fire-and-forget: generate AI description + embedding for a newly uploaded photo.
+ * Runs in background — errors are logged but don't affect the upload response.
+ */
+async function describeAndEmbed(collection, photoId) {
+	try {
+		// Get the photo record to find thumbnail URL
+		const data = await readJson(`data/${collection}/photos.json`);
+		const photo = data.photos?.find(p => p.id === photoId);
+		if (!photo?.thumbnail) return;
+
+		// Generate AI description
+		const aiDescription = await describePhoto(photo.thumbnail);
+		if (!aiDescription) return;
+
+		// Save description to photo record
+		await updateJson(`data/${collection}/photos.json`, (d) => {
+			const p = d.photos?.find(p => p.id === photoId);
+			if (p) p.aiDescription = aiDescription;
+		});
+
+		// Generate and save embedding
+		const embeddingText = buildEmbeddingText({ ...photo, aiDescription });
+		const embedding = await generateEmbedding(embeddingText);
+		if (!embedding) return;
+
+		const embeddingsPath = path.resolve('data', collection, 'embeddings.json');
+		let embData = { model: 'text-embedding-3-small', dimensions: 1536, embeddings: {} };
+		if (fs.existsSync(embeddingsPath)) {
+			try { embData = JSON.parse(fs.readFileSync(embeddingsPath, 'utf8')); } catch { /* fresh */ }
+		}
+		embData.embeddings[photoId] = embedding;
+		fs.writeFileSync(embeddingsPath, JSON.stringify(embData) + '\n');
+
+		invalidateCache(collection);
+	} catch (err) {
+		console.warn(`Background describe/embed failed for ${photoId}:`, err.message);
+	}
+}
 
 const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
 const VIDEO_TYPES = ['video/mp4', 'video/quicktime'];
@@ -101,6 +146,10 @@ export async function POST({ request }) {
 		}
 
 		const photo = await processAndUpload(collection, buffer, file.name);
+
+		// Fire-and-forget: generate AI description + embedding in background
+		describeAndEmbed(collection, photo.id).catch(() => {});
+
 		return json({ photo }, { status: 201 });
 	} catch (err) {
 		console.error('Upload failed:', err);

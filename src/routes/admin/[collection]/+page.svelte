@@ -73,23 +73,61 @@
 	let searchText = $state('');
 	let dateFrom = $state('');
 	let dateTo = $state('');
+	let aiSearchMode = $state(false);
+	let aiSearchResults = $state(null);
+	let aiSearchLoading = $state(false);
+	let aiDebounceTimer;
 
 	let hasFilters = $derived(!!(searchText.trim() || dateFrom || dateTo));
+
+	function handleSearchInput() {
+		if (aiSearchMode && searchText.trim().length >= 2) {
+			clearTimeout(aiDebounceTimer);
+			aiDebounceTimer = setTimeout(() => doAiSearch(searchText.trim()), 400);
+		} else {
+			aiSearchResults = null;
+		}
+	}
+
+	async function doAiSearch(q) {
+		aiSearchLoading = true;
+		try {
+			const params = new URLSearchParams({ q, collection: data.collection.slug, limit: '50' });
+			const resp = await fetch(`/api/search?${params}`);
+			const result = await resp.json();
+			if (resp.ok) {
+				// Map results to photo IDs for filtering the local photos array
+				const resultIds = new Set(result.results.map(r => r.id));
+				aiSearchResults = resultIds;
+			} else {
+				aiSearchResults = null;
+			}
+		} catch {
+			aiSearchResults = null;
+		} finally {
+			aiSearchLoading = false;
+		}
+	}
 
 	let filteredPhotos = $derived.by(() => {
 		let result = photos;
 
-		const q = searchText.trim().toLowerCase();
-		if (q) {
-			result = result.filter((p) =>
-				p.filename?.toLowerCase().includes(q) ||
-				p.description?.toLowerCase().includes(q) ||
-				p.locationName?.toLowerCase().includes(q) ||
-				(p.tags ?? []).some((t) => t.toLowerCase().includes(q)) ||
-				p.species?.toLowerCase().includes(q) ||
-				p.spot?.toLowerCase().includes(q) ||
-				p.conditions?.toLowerCase().includes(q)
-			);
+		if (aiSearchMode && aiSearchResults) {
+			// AI search mode: filter to AI-matched photos, respecting date filters
+			result = result.filter((p) => aiSearchResults.has(p.id));
+		} else if (!aiSearchMode) {
+			const q = searchText.trim().toLowerCase();
+			if (q) {
+				result = result.filter((p) =>
+					p.filename?.toLowerCase().includes(q) ||
+					p.description?.toLowerCase().includes(q) ||
+					p.locationName?.toLowerCase().includes(q) ||
+					(p.tags ?? []).some((t) => t.toLowerCase().includes(q)) ||
+					p.species?.toLowerCase().includes(q) ||
+					p.spot?.toLowerCase().includes(q) ||
+					p.conditions?.toLowerCase().includes(q)
+				);
+			}
 		}
 
 		if (dateFrom) {
@@ -107,6 +145,8 @@
 		searchText = '';
 		dateFrom = '';
 		dateTo = '';
+		aiSearchMode = false;
+		aiSearchResults = null;
 	}
 
 	let selectedCount = $derived(selectedPhotos.size);
@@ -455,9 +495,19 @@
 				<input
 					class="filter-search"
 					type="search"
-					placeholder="Search filename, description, location, tags…"
+					placeholder={aiSearchMode ? "AI search: describe what you're looking for…" : "Search filename, description, location, tags…"}
 					bind:value={searchText}
+					oninput={handleSearchInput}
 				/>
+				<button
+					class="btn btn-xs"
+					class:btn-primary={aiSearchMode}
+					class:btn-outline={!aiSearchMode}
+					title="Toggle AI-powered semantic search"
+					onclick={() => { aiSearchMode = !aiSearchMode; aiSearchResults = null; if (aiSearchMode && searchText.trim().length >= 2) doAiSearch(searchText.trim()); }}
+				>
+					AI{aiSearchLoading ? '...' : ''}
+				</button>
 				<input
 					class="filter-date"
 					type="date"

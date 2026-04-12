@@ -1,5 +1,6 @@
 <script>
 	import Gallery from '$lib/components/common/Gallery.svelte';
+	import SearchBar from '$lib/components/common/SearchBar.svelte';
 	import ItineraryMap from '$lib/components/travel/ItineraryMap.svelte';
 	import Timeline from '$lib/components/travel/Timeline.svelte';
 	import AncestryPanel from '$lib/components/travel/AncestryPanel.svelte';
@@ -199,6 +200,11 @@
 			<SpotGallery photos={data.photos} apiKey={data.googleMapsApiKey} onboundschange={handleBoundsChange} collectionSlug={data.collection.slug} {gotoTarget} />
 		</section>
 	{/if}
+
+	<!-- AI photo search -->
+	<section style="margin-top: 32px;">
+		<SearchBar collection={data.collection.slug} bounds={mapFilterActive && mapBounds ? { north: mapBounds.north, south: mapBounds.south, east: mapBounds.east, west: mapBounds.west } : undefined} />
+	</section>
 
 	<!-- Photo gallery -->
 	<section style="margin-top: 32px;">

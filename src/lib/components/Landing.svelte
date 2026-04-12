@@ -3,6 +3,8 @@
 	 * Landing page — hero section + collection cards grid.
 	 * Props: collections, photosByCollection
 	 */
+	import SearchBar from '$lib/components/common/SearchBar.svelte';
+
 	let { collections = [], photosByCollection = {}, photoCounts = {} } = $props();
 
 	function getHeroUrl(collection) {
@@ -27,6 +29,10 @@
 			<h1>Gaylon Photos</h1>
 			<p>Travel journals, wildlife encounters, and ocean action</p>
 		</div>
+	</section>
+
+	<section class="search-section container">
+		<SearchBar />
 	</section>
 
 	<section class="collections-section container">
@@ -105,8 +111,11 @@
 		font-size: 1.1rem;
 		text-shadow: 0 1px 6px rgba(0, 0, 0, 0.3);
 	}
+	.search-section {
+		padding-top: 32px;
+	}
 	.collections-section {
-		padding-top: 48px;
+		padding-top: 24px;
 	}
 	.collections-grid {
 		display: grid;
