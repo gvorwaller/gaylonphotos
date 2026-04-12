@@ -8,7 +8,8 @@
 	 *   center: { lat, lng } — initial center
 	 *   zoom: number — initial zoom (default: 10)
 	 *   markers: Array<{ lat, lng, id, label?, color?, shape? }> — markers to display
-	 *   polyline: Array<{ lat, lng }> | null — route line
+	 *   polyline: Array<{ lat, lng }> | null — single route line (legacy)
+ *   polylines: Array<{ path: Array<{lat,lng}>, color: string, dashed?: boolean }> | null — multiple route segments
 	 *   clickable: boolean — if true, dispatches onmapclick (default: false)
 	 *   apiKey: string — Google Maps API key
 	 *   onmapclick: ({ lat, lng }) => void
@@ -23,6 +24,7 @@
 		zoom = 10,
 		markers = [],
 		polyline = null,
+		polylines = null,
 		clickable = false,
 		apiKey = '',
 		onmapclick = null,
@@ -39,6 +41,7 @@
 	let map = $state(null);
 	let googleMarkers = []; // Array of { marker, handler } objects
 	let googlePolyline = null;
+	let googlePolylines = [];
 	let infoWindowInstance = null;
 	let searchAutocomplete = null;
 	let apiLoaded = $state(false);
@@ -237,19 +240,64 @@
 		};
 	});
 
-	// Sync polyline — read both deps upfront so the effect always tracks map AND polyline
+	// Sync polylines — supports both single `polyline` prop (legacy) and multi `polylines` prop
 	$effect(() => {
 		const currentMap = map;
 		const currentPolyline = polyline;
+		const currentPolylines = polylines;
 
 		if (!currentMap) return;
 
+		// Clean up old polyline(s)
 		if (googlePolyline) {
 			googlePolyline.setMap(null);
 			googlePolyline = null;
 		}
+		for (const gp of googlePolylines) gp.setMap(null);
+		googlePolylines = [];
 
-		if (currentPolyline && currentPolyline.length >= 2) {
+		if (currentPolylines && currentPolylines.length > 0) {
+			// Multi-polyline mode
+			for (const seg of currentPolylines) {
+				if (!seg.path || seg.path.length < 2) continue;
+				const color = seg.color || '#28a745';
+				const opts = {
+					path: seg.path,
+					geodesic: true,
+					strokeColor: color,
+					strokeOpacity: seg.dashed ? 0 : 0.8,
+					strokeWeight: 3,
+					map: currentMap
+				};
+				if (seg.dashed) {
+					opts.icons = [{
+						icon: { path: 'M 0,-1 0,1', strokeOpacity: 0.8, strokeColor: color, scale: 3 },
+						offset: '0',
+						repeat: '14px'
+					}, {
+						icon: {
+							path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
+							scale: 3, strokeColor: color, strokeOpacity: 1,
+							fillColor: color, fillOpacity: 0.8
+						},
+						offset: '50%',
+						repeat: '90px'
+					}];
+				} else {
+					opts.icons = [{
+						icon: {
+							path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
+							scale: 3, strokeColor: color, strokeOpacity: 1,
+							fillColor: color, fillOpacity: 0.8
+						},
+						offset: '50%',
+						repeat: '90px'
+					}];
+				}
+				googlePolylines.push(new google.maps.Polyline(opts));
+			}
+		} else if (currentPolyline && currentPolyline.length >= 2) {
+			// Legacy single polyline mode
 			googlePolyline = new google.maps.Polyline({
 				path: currentPolyline,
 				geodesic: true,
@@ -277,6 +325,8 @@
 				googlePolyline.setMap(null);
 				googlePolyline = null;
 			}
+			for (const gp of googlePolylines) gp.setMap(null);
+			googlePolylines = [];
 		};
 	});
 

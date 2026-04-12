@@ -139,7 +139,7 @@
 	let markers = $derived.by(() => {
 		const m = [];
 
-		// Stop markers (numbered, green circles)
+		// Stop markers (numbered; green for main, orange for side trips)
 		for (let i = 0; i < stops.length; i++) {
 			const s = stops[i];
 			if (s.lat != null && s.lng != null && (s.lat !== 0 || s.lng !== 0)) {
@@ -148,7 +148,7 @@
 					lng: s.lng,
 					id: `stop-${s.id}`,
 					label: `${i + 1}. ${s.city}`,
-					color: '#28a745'
+					color: s.sideTrip ? '#e67e22' : '#28a745'
 				});
 			}
 		}
@@ -186,9 +186,51 @@
 		return m;
 	});
 
-	let polylinePath = $derived(
-		stops.filter((s) => s.lat != null && s.lng != null && (s.lat !== 0 || s.lng !== 0)).map((s) => ({ lat: s.lat, lng: s.lng }))
-	);
+	function hasGps(s) {
+		return s.lat != null && s.lng != null && (s.lat !== 0 || s.lng !== 0);
+	}
+
+	let routePolylines = $derived.by(() => {
+		const hasSideTrips = stops.some((s) => s.sideTrip);
+		if (!hasSideTrips) {
+			// No side trips — single green polyline (same as before)
+			const path = stops.filter(hasGps).map((s) => ({ lat: s.lat, lng: s.lng }));
+			return path.length >= 2 ? [{ path, color: '#28a745' }] : [];
+		}
+
+		// Main route: only non-side-trip stops
+		const mainStops = stops.filter((s) => !s.sideTrip);
+		const mainPath = mainStops.filter(hasGps).map((s) => ({ lat: s.lat, lng: s.lng }));
+		const result = mainPath.length >= 2 ? [{ path: mainPath, color: '#28a745' }] : [];
+
+		// Side-trip routes: group consecutive side-trip stops by parentStopId
+		const stopById = new globalThis.Map(stops.map((s) => [s.id, s]));
+		let i = 0;
+		while (i < stops.length) {
+			if (stops[i].sideTrip && stops[i].parentStopId != null) {
+				const parentId = stops[i].parentStopId;
+				const parent = stopById.get(parentId);
+				const group = [];
+				while (i < stops.length && stops[i].sideTrip && stops[i].parentStopId === parentId) {
+					group.push(stops[i]);
+					i++;
+				}
+				const sidePath = [];
+				if (parent && hasGps(parent)) sidePath.push({ lat: parent.lat, lng: parent.lng });
+				for (const s of group) {
+					if (hasGps(s)) sidePath.push({ lat: s.lat, lng: s.lng });
+				}
+				if (parent && hasGps(parent)) sidePath.push({ lat: parent.lat, lng: parent.lng });
+				if (sidePath.length >= 2) {
+					result.push({ path: sidePath, color: '#e67e22', dashed: true });
+				}
+			} else {
+				i++;
+			}
+		}
+
+		return result;
+	});
 </script>
 
 <div class="itinerary-map">
@@ -197,7 +239,7 @@
 		center={{ lat: 55, lng: 15 }}
 		zoom={4}
 		markers={markers}
-		polyline={polylinePath}
+		polylines={routePolylines}
 		{onboundschange}
 		infoWindowEnabled={true}
 		onmarkerclick={handleMarkerClick}
