@@ -9,8 +9,23 @@
 	let groupedStops = $derived.by(() => {
 		const groups = stops.map((stop) => ({
 			stop,
-			photos: []
+			photos: [],
+			sideTrips: [] // child side-trip groups nested under their parent
 		}));
+
+		// Build lookup: stop id → index in groups array
+		const idxById = new globalThis.Map(stops.map((s, i) => [s.id, i]));
+
+		// Nest side-trip groups under their parent stop
+		for (let i = 0; i < groups.length; i++) {
+			const s = groups[i].stop;
+			if (s.sideTrip && s.parentStopId != null) {
+				const parentIdx = idxById.get(s.parentStopId);
+				if (parentIdx != null) {
+					groups[parentIdx].sideTrips.push(groups[i]);
+				}
+			}
+		}
 
 		// Simple grouping: assign each photo to the closest stop by date
 		for (const photo of photos) {
@@ -44,7 +59,8 @@
 			}
 		}
 
-		return groups;
+		// Return only top-level stops (side trips are nested inside their parent's sideTrips array)
+		return groups.filter((g) => !g.stop.sideTrip);
 	});
 
 	function formatDateRange(arrival, departure) {
@@ -61,7 +77,7 @@
 		<div class="timeline-item">
 			<div class="timeline-marker">
 				<div class="marker-dot"></div>
-				{#if idx < stops.length - 1}
+				{#if idx < groupedStops.length - 1 || group.sideTrips.length > 0}
 					<div class="marker-line"></div>
 				{/if}
 			</div>
@@ -88,6 +104,45 @@
 						{#if group.photos.length > 6}
 							<span class="more-count">+{group.photos.length - 6}</span>
 						{/if}
+					</div>
+				{/if}
+
+				{#if group.sideTrips.length > 0}
+					<div class="side-trips">
+						{#each group.sideTrips as st (st.stop.id)}
+							<div class="timeline-item side-trip-item">
+								<div class="timeline-marker">
+									<div class="marker-dot side-trip-dot"></div>
+									{#if group.sideTrips.indexOf(st) < group.sideTrips.length - 1}
+										<div class="marker-line side-trip-line"></div>
+									{/if}
+								</div>
+								<div class="timeline-content">
+									<div class="timeline-header">
+										<h3>{st.stop.city}, {st.stop.country}</h3>
+										<span class="side-trip-badge">Side Trip</span>
+										<span class="timeline-dates">
+											{formatDateRange(st.stop.arrivalDate, st.stop.departureDate)}
+										</span>
+									</div>
+									{#if st.stop.notes}
+										<p class="timeline-notes">{st.stop.notes}</p>
+									{/if}
+									{#if st.photos.length > 0}
+										<div class="timeline-photos">
+											{#each st.photos.slice(0, 6) as photo (photo.id)}
+												<a href="/{collectionSlug}/photo/{photo.id}" class="timeline-thumb">
+													<img src={photo.thumbnail} alt={photo.description || photo.filename} loading="lazy" />
+												</a>
+											{/each}
+											{#if st.photos.length > 6}
+												<span class="more-count">+{st.photos.length - 6}</span>
+											{/if}
+										</div>
+									{/if}
+								</div>
+							</div>
+						{/each}
 					</div>
 				{/if}
 			</div>
@@ -178,6 +233,28 @@
 		font-size: 0.75rem;
 		color: var(--color-text-muted);
 		font-weight: 600;
+	}
+	.side-trips {
+		margin-top: 12px;
+		padding-left: 8px;
+		border-left: 2px dashed #e67e22;
+	}
+	.side-trip-item {
+		min-height: 60px;
+	}
+	.side-trip-dot {
+		background: #e67e22;
+	}
+	.side-trip-line {
+		background: #e67e22;
+	}
+	.side-trip-badge {
+		font-size: 0.7rem;
+		font-weight: 600;
+		color: #e67e22;
+		background: #fef3e2;
+		padding: 1px 6px;
+		border-radius: 4px;
 	}
 	.timeline-empty {
 		text-align: center;

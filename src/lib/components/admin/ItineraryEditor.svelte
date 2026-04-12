@@ -69,21 +69,59 @@
 		stops = itinerary?.stops ? [...itinerary.stops] : [];
 	});
 
-	// Map markers from stops
+	// Map markers from stops (orange for side trips)
 	let markers = $derived(
 		stops.filter((s) => s.lat != null && s.lng != null && (s.lat !== 0 || s.lng !== 0)).map((s, i) => ({
 			lat: s.lat,
 			lng: s.lng,
 			id: `stop-${s.id}`,
 			label: `${i + 1}. ${s.city}`,
-			color: '#28a745'
+			color: s.sideTrip ? '#e67e22' : '#28a745'
 		}))
 	);
 
-	// Polyline from stops
-	let polylinePath = $derived(
-		stops.filter((s) => s.lat != null && s.lng != null && (s.lat !== 0 || s.lng !== 0)).map((s) => ({ lat: s.lat, lng: s.lng }))
-	);
+	// Main-route stops for the "branches from" dropdown
+	let mainStops = $derived(stops.filter((s) => !s.sideTrip));
+
+	function hasGps(s) {
+		return s.lat != null && s.lng != null && (s.lat !== 0 || s.lng !== 0);
+	}
+
+	// Build polylines: main route (green) + side trips (dashed orange)
+	let editorPolylines = $derived.by(() => {
+		const hasSideTrips = stops.some((s) => s.sideTrip);
+		if (!hasSideTrips) {
+			const path = stops.filter(hasGps).map((s) => ({ lat: s.lat, lng: s.lng }));
+			return path.length >= 2 ? [{ path, color: '#28a745' }] : [];
+		}
+
+		const mainPath = stops.filter((s) => !s.sideTrip && hasGps(s)).map((s) => ({ lat: s.lat, lng: s.lng }));
+		const result = mainPath.length >= 2 ? [{ path: mainPath, color: '#28a745' }] : [];
+
+		const stopById = new globalThis.Map(stops.map((s) => [s.id, s]));
+		let i = 0;
+		while (i < stops.length) {
+			if (stops[i].sideTrip && stops[i].parentStopId != null) {
+				const parentId = stops[i].parentStopId;
+				const parent = stopById.get(parentId);
+				const group = [];
+				while (i < stops.length && stops[i].sideTrip && stops[i].parentStopId === parentId) {
+					group.push(stops[i]);
+					i++;
+				}
+				const sidePath = [];
+				if (parent && hasGps(parent)) sidePath.push({ lat: parent.lat, lng: parent.lng });
+				for (const s of group) {
+					if (hasGps(s)) sidePath.push({ lat: s.lat, lng: s.lng });
+				}
+				if (parent && hasGps(parent)) sidePath.push({ lat: parent.lat, lng: parent.lng });
+				if (sidePath.length >= 2) result.push({ path: sidePath, color: '#e67e22', dashed: true });
+			} else {
+				i++;
+			}
+		}
+		return result;
+	});
 
 	function addStop() {
 		const newStop = {
@@ -94,7 +132,9 @@
 			lng: 0,
 			arrivalDate: null,
 			departureDate: null,
-			notes: ''
+			notes: '',
+			sideTrip: false,
+			parentStopId: null
 		};
 		stops = [...stops, newStop];
 		editingStopIdx = stops.length - 1;
@@ -193,8 +233,8 @@
 
 		<div class="stops-list">
 			{#each stops as stop, idx (stop.id)}
-				<div class="stop-card" class:editing={editingStopIdx === idx}>
-					<div class="stop-number">{idx + 1}</div>
+				<div class="stop-card" class:editing={editingStopIdx === idx} class:side-trip-card={stop.sideTrip}>
+					<div class="stop-number" class:side-trip-number={stop.sideTrip}>{idx + 1}</div>
 					<div class="stop-fields">
 						<div class="field-row">
 							<input type="text" bind:value={stop.city} placeholder="City" />
@@ -214,6 +254,20 @@
 							<button class="btn btn-outline btn-sm" onclick={() => startPickGps(idx)}>
 								{pickingGps && editingStopIdx === idx ? 'Click map...' : 'Set on map'}
 							</button>
+						</div>
+						<div class="side-trip-row">
+							<label class="side-trip-toggle">
+								<input type="checkbox" bind:checked={stop.sideTrip} onchange={() => { if (!stop.sideTrip) stop.parentStopId = null; stops = [...stops]; }} />
+								<span>Side trip</span>
+							</label>
+							{#if stop.sideTrip}
+								<select class="side-trip-select" bind:value={stop.parentStopId} onchange={() => { stops = [...stops]; }}>
+									<option value={null}>Branches from...</option>
+									{#each mainStops as ms}
+										<option value={ms.id}>{ms.city || '(unnamed)'}</option>
+									{/each}
+								</select>
+							{/if}
 						</div>
 					</div>
 					<div class="stop-actions">
@@ -243,7 +297,7 @@
 				center={{ lat: 55, lng: 15 }}
 				zoom={4}
 				{markers}
-				polyline={polylinePath}
+				polylines={editorPolylines}
 				clickable={true}
 				onmapclick={handleMapClick}
 				onmapready={handleMapReady}
@@ -451,5 +505,38 @@
 		border-radius: var(--radius-sm);
 		font-size: 0.85rem;
 		margin-bottom: 12px;
+	}
+	.side-trip-card {
+		border-left: 3px solid #e67e22;
+		margin-left: 12px;
+	}
+	.side-trip-number {
+		background: #e67e22;
+	}
+	.side-trip-row {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		margin-top: 4px;
+	}
+	.side-trip-toggle {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		font-size: 0.75rem;
+		color: var(--color-text-muted);
+		cursor: pointer;
+	}
+	.side-trip-toggle input[type="checkbox"] {
+		margin: 0;
+	}
+	.side-trip-select {
+		padding: 3px 6px;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		font-size: 0.75rem;
+		font-family: inherit;
+		flex: 1;
+		max-width: 180px;
 	}
 </style>
