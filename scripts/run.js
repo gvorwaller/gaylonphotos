@@ -96,6 +96,23 @@ const SCRIPTS = [
 		],
 	},
 	{
+		file: 'describe-photos.js',
+		description: 'Generate AI descriptions for photos (GPT-4.1-mini)',
+		params: [
+			{ name: 'collection', type: 'collection' },
+			{ name: '--dry-run', type: 'flag', description: 'Preview without writing changes' },
+			{ name: '--force', type: 'flag', description: 'Re-describe photos that already have aiDescription' },
+		],
+	},
+	{
+		file: 'embed-photos.js',
+		description: 'Generate search embeddings from AI descriptions',
+		params: [
+			{ name: 'collection', type: 'collection' },
+			{ name: '--force', type: 'flag', description: 'Re-embed all photos (not just new ones)' },
+		],
+	},
+	{
 		file: 'vision-standalone.js',
 		description: 'Bird species identification (module, not standalone)',
 		params: [
