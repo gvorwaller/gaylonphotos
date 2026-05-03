@@ -17,13 +17,21 @@
 	function ssGet(key) { return browser ? sessionStorage.getItem(key) : null; }
 	function ssSet(key, val) { if (browser) sessionStorage.setItem(key, val); }
 
+	// Default the ancestry toggle ON for collections that have heritage data,
+	// unless the user has explicitly toggled it for this collection in this session.
+	function initialAncestryToggle(slug, collectionData) {
+		const stored = ssGet(`ancestry-toggle-${slug}`);
+		if (stored === null) return collectionData.ancestry?.persons?.length > 0;
+		return stored === 'true';
+	}
+
 	// Capture initial slug at mount — used only for sessionStorage init (runs once per mount)
 	const _initSlug = untrack(() => data.collection.slug);
 
 	let filterSpecies = $state(null);
 	let mapBounds = $state(null);
 	let mapFilterActive = $state(false);
-	let showAncestryOnMap = $state(ssGet(`ancestry-toggle-${_initSlug}`) === 'true');
+	let showAncestryOnMap = $state(untrack(() => initialAncestryToggle(_initSlug, data)));
 	let prevSlug; // Plain let, not $state — must not trigger effect re-runs
 
 	// Restore last map position only when back-navigating from a photo detail view.
@@ -41,7 +49,7 @@
 			mapBounds = null;
 			mapFilterActive = false;
 			// Restore per-collection sessionStorage state rather than blanket reset
-			showAncestryOnMap = ssGet(`ancestry-toggle-${currentSlug}`) === 'true';
+			showAncestryOnMap = initialAncestryToggle(currentSlug, data);
 			const fromDetail = ssGet(`${currentSlug}_fromDetail`) === '1';
 			if (fromDetail) sessionStorage.removeItem(`${currentSlug}_fromDetail`);
 			const savedPos = fromDetail ? ssGet(`map-pos-${currentSlug}`) : null;
