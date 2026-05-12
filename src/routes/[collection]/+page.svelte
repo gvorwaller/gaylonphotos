@@ -174,7 +174,12 @@
 
 			<section style="margin-top: 32px;">
 				<h2 class="section-label">Timeline</h2>
-				<Timeline photos={data.photos} stops={data.itinerary?.stops ?? []} collectionSlug={data.collection.slug} />
+				<Timeline
+					photos={data.photos}
+					stops={data.itinerary?.stops ?? []}
+					collectionSlug={data.collection.slug}
+					ongotolocation={(target) => { gotoTarget = target; mapFilterActive = true; }}
+				/>
 			</section>
 		{/if}
 

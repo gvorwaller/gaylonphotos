@@ -3,7 +3,17 @@
 	 * Vertical timeline grouped by itinerary stops.
 	 * Props: photos, stops
 	 */
-	let { photos = [], stops = [], collectionSlug = '' } = $props();
+	let { photos = [], stops = [], collectionSlug = '', ongotolocation = null } = $props();
+
+	function hasCoords(stop) {
+		return stop.lat != null && stop.lng != null && (stop.lat !== 0 || stop.lng !== 0);
+	}
+
+	function gotoStop(stop) {
+		if (hasCoords(stop) && ongotolocation) {
+			ongotolocation({ lat: stop.lat, lng: stop.lng, zoom: 12, _ts: Date.now() });
+		}
+	}
 
 	// Group photos by closest stop (by date range or proximity)
 	let groupedStops = $derived.by(() => {
@@ -88,6 +98,9 @@
 					<span class="timeline-dates">
 						{formatDateRange(group.stop.arrivalDate, group.stop.departureDate)}
 					</span>
+					{#if hasCoords(group.stop) && ongotolocation}
+						<button class="goto-btn" onclick={() => gotoStop(group.stop)} title="Show on map">&#x1F4CD; Map</button>
+					{/if}
 				</div>
 
 				{#if group.stop.notes}
@@ -124,6 +137,9 @@
 										<span class="timeline-dates">
 											{formatDateRange(st.stop.arrivalDate, st.stop.departureDate)}
 										</span>
+										{#if hasCoords(st.stop) && ongotolocation}
+											<button class="goto-btn" onclick={() => gotoStop(st.stop)} title="Show on map">&#x1F4CD; Map</button>
+										{/if}
 									</div>
 									{#if st.stop.notes}
 										<p class="timeline-notes">{st.stop.notes}</p>
@@ -260,5 +276,21 @@
 		text-align: center;
 		color: var(--color-text-muted);
 		padding: 32px 0;
+	}
+	.goto-btn {
+		background: #e8f5e9;
+		border: 1px solid #a5d6a7;
+		border-radius: 4px;
+		padding: 1px 5px;
+		font-size: 0.8rem;
+		cursor: pointer;
+		color: #388e3c;
+		vertical-align: middle;
+		line-height: 1.2;
+		transition: background 0.1s, border-color 0.1s;
+	}
+	.goto-btn:hover {
+		background: #c8e6c9;
+		border-color: #66bb6a;
 	}
 </style>
