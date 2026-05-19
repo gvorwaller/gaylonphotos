@@ -8,12 +8,15 @@
 	 *   bounds      — GPS bounding box { north, south, east, west } (optional)
 	 *   compact     — smaller variant for embedding in other UIs (optional)
 	 */
+	import Lightbox from './Lightbox.svelte';
+
 	let { collection = undefined, bounds = undefined, compact = false } = $props();
 
 	let query = $state('');
 	let results = $state(null);
 	let loading = $state(false);
 	let error = $state(null);
+	let lightboxPhoto = $state(null);
 	let debounceTimer;
 
 	function handleInput() {
@@ -96,8 +99,16 @@
 	{#if results && results.length > 0}
 		<div class="search-results">
 			{#each results as result (result.id + result.collection)}
-				<a href="/{result.collection}/photo/{result.id}" class="search-result-card">
-					<img src={result.thumbnail} alt="" loading="lazy" class="search-thumb" />
+				<div class="search-result-card">
+					<button class="search-result-btn" onclick={() => (lightboxPhoto = result)} aria-label="View photo">
+						<img src={result.thumbnail} alt="" loading="lazy" class="search-thumb" />
+					</button>
+					<a
+						href="/{result.collection}/photo/{result.id}"
+						class="search-result-detail"
+						title="Open photo detail page"
+						aria-label="Open photo detail page"
+					>&#x2197;</a>
 					<div class="search-result-info">
 						{#if !collection}
 							<span class="search-collection-tag">{result.collection}</span>
@@ -106,11 +117,20 @@
 							<p class="search-desc">{result.aiDescription.slice(0, 120)}{result.aiDescription.length > 120 ? '...' : ''}</p>
 						{/if}
 					</div>
-				</a>
+				</div>
 			{/each}
 		</div>
 	{/if}
 </div>
+
+{#if lightboxPhoto}
+	<Lightbox
+		photo={lightboxPhoto}
+		photos={results}
+		collectionSlug={lightboxPhoto.collection}
+		onclose={() => (lightboxPhoto = null)}
+	/>
+{/if}
 
 <style>
 	.search-bar {
@@ -200,17 +220,52 @@
 		margin-top: 10px;
 	}
 	.search-result-card {
+		position: relative;
 		background: var(--color-surface, #fff);
 		border: 1px solid var(--color-border, #e9ecef);
 		border-radius: 8px;
 		overflow: hidden;
-		text-decoration: none;
 		color: inherit;
 		transition: transform 0.15s, box-shadow 0.15s;
 	}
 	.search-result-card:hover {
 		transform: translateY(-2px);
 		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+	}
+	.search-result-btn {
+		display: block;
+		width: 100%;
+		padding: 0;
+		border: none;
+		background: none;
+		cursor: pointer;
+		color: inherit;
+		font: inherit;
+	}
+	.search-result-detail {
+		position: absolute;
+		top: 6px;
+		right: 6px;
+		width: 24px;
+		height: 24px;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		background: rgba(0, 0, 0, 0.55);
+		color: #fff;
+		border-radius: 4px;
+		text-decoration: none;
+		font-size: 0.9rem;
+		line-height: 1;
+		opacity: 0;
+		transition: opacity 0.15s, background 0.15s;
+	}
+	.search-result-card:hover .search-result-detail,
+	.search-result-detail:focus-visible {
+		opacity: 1;
+	}
+	.search-result-detail:hover {
+		background: rgba(0, 0, 0, 0.8);
 	}
 	.search-thumb {
 		width: 100%;
