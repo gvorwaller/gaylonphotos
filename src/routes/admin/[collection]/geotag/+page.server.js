@@ -10,7 +10,16 @@ export async function load({ params }) {
 	}
 
 	const allPhotos = await listPhotos(params.collection);
-	const untaggedPhotos = allPhotos.filter((p) => p.gpsSource === null);
+	// Show untagged first so they're top of the list, then tagged photos
+	// (chronological within each group so order stays predictable).
+	allPhotos.sort((a, b) => {
+		const aUntagged = a.gpsSource === null ? 0 : 1;
+		const bUntagged = b.gpsSource === null ? 0 : 1;
+		if (aUntagged !== bUntagged) return aUntagged - bUntagged;
+		const ad = a.date || '';
+		const bd = b.date || '';
+		return ad.localeCompare(bd);
+	});
 
-	return { collection, allPhotos, untaggedPhotos };
+	return { collection, photos: allPhotos };
 }

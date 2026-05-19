@@ -13,8 +13,7 @@
 	<div style="margin-top: 16px;">
 		<GeoTagger
 			collectionSlug={data.collection.slug}
-			photos={data.untaggedPhotos}
-			allPhotos={data.allPhotos}
+			photos={data.photos}
 			apiKey={data.googleMapsApiKey}
 		/>
 	</div>

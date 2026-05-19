@@ -11,11 +11,11 @@
 	import { reverseGeocode } from '$lib/geocoding.js';
 	import AdminPhotoLightbox from '$lib/components/admin/AdminPhotoLightbox.svelte';
 
-	let { collectionSlug, photos = [], allPhotos = [], apiKey = '' } = $props();
+	let { collectionSlug, photos = [], apiKey = '' } = $props();
 
-	// Working copies — photos move from untagged to tagged as they're assigned
+	// Working copy of all photos (tagged + untagged in one list).
+	// Mutations (assign GPS, clear GPS) update photos in place rather than moving them.
 	let localAllPhotos = $state([]);
-	let untaggedPhotos = $state([]);
 	let selectedIds = $state(new Set());
 	let pendingCoords = $state(null);
 	let assigning = $state(false);
@@ -24,11 +24,13 @@
 
 	// Re-sync when navigating to a different collection's geotag page
 	$effect(() => {
-		localAllPhotos = [...allPhotos];
-		untaggedPhotos = [...photos];
+		localAllPhotos = [...photos];
 		selectedIds = new Set();
 		pendingCoords = null;
 	});
+
+	let untaggedCount = $derived(localAllPhotos.filter((p) => p.gpsSource === null).length);
+	let taggedCount = $derived(localAllPhotos.length - untaggedCount);
 
 	// Place search
 	let searchInput;
@@ -112,7 +114,11 @@
 	}
 
 	function selectAll() {
-		selectedIds = new Set(untaggedPhotos.map((p) => p.id));
+		// Default to selecting all untagged photos; if everything is already tagged,
+		// select all photos (so the user can bulk-overwrite GPS).
+		const untagged = localAllPhotos.filter((p) => p.gpsSource === null);
+		const source = untagged.length > 0 ? untagged : localAllPhotos;
+		selectedIds = new Set(source.map((p) => p.id));
 	}
 
 	function clearSelection() {
@@ -146,26 +152,32 @@
 			const assignedIds = [...selectedIds];
 			const coords = pendingCoords;
 
-			// Remove assigned photos from untagged list
-			untaggedPhotos = untaggedPhotos.filter((p) => !selectedIds.has(p.id));
+			// Update photos in place (works for both new and overwritten GPS)
+			localAllPhotos = localAllPhotos.map((p) =>
+				selectedIds.has(p.id)
+					? { ...p, gps: { lat: coords.lat, lng: coords.lng }, gpsSource: 'manual', locationName: null }
+					: p
+			);
 			selectedIds = new Set();
 			pendingCoords = null;
 
 			// Backfill locationName in the background
 			if (apiKey && coords) {
 				reverseGeocode(coords.lat, coords.lng, apiKey).then(async (name) => {
-					if (name) {
-						for (const photoId of assignedIds) {
-							const putResult = await apiPut('/api/photos', {
-								collection: slug,
-								photoId,
-								updates: { locationName: name }
-							});
-							if (!putResult.ok) {
-								console.warn(`Failed to set locationName for ${photoId}:`, putResult.error);
-							}
+					if (!name) return;
+					for (const photoId of assignedIds) {
+						const putResult = await apiPut('/api/photos', {
+							collection: slug,
+							photoId,
+							updates: { locationName: name }
+						});
+						if (!putResult.ok) {
+							console.warn(`Failed to set locationName for ${photoId}:`, putResult.error);
 						}
 					}
+					localAllPhotos = localAllPhotos.map((p) =>
+						assignedIds.includes(p.id) ? { ...p, locationName: name } : p
+					);
 				}).catch((err) => console.warn('Background geocode failed:', err));
 			}
 		} else {
@@ -215,15 +227,10 @@
 			});
 			clearingGps = false;
 			if (result.ok) {
-				// Move photo from tagged to untagged
-				const photo = localAllPhotos.find((p) => p.id === photoId);
-				if (photo) {
-					photo.gps = null;
-					photo.gpsSource = null;
-					photo.locationName = null;
-					localAllPhotos = [...localAllPhotos];
-					untaggedPhotos = [...untaggedPhotos, photo];
-				}
+				// Update photo in place — it stays in the list but becomes untagged
+				localAllPhotos = localAllPhotos.map((p) =>
+					p.id === photoId ? { ...p, gps: null, gpsSource: null, locationName: null } : p
+				);
 			} else {
 				error = result.error || 'Failed to clear GPS';
 			}
@@ -235,7 +242,7 @@
 	<div class="geotagger-left">
 		<div class="geotagger-toolbar">
 			<span class="count">
-				{untaggedPhotos.length} untagged, {selectedCount} selected
+				{untaggedCount} untagged · {taggedCount} tagged · {selectedCount} selected
 			</span>
 			<div class="toolbar-actions">
 				<button class="btn btn-outline btn-sm" onclick={selectAll}>Select All</button>
@@ -247,22 +254,28 @@
 			<div class="geotagger-error">{error}</div>
 		{/if}
 
-		{#if untaggedPhotos.length === 0}
+		{#if localAllPhotos.length === 0}
 			<div class="geotagger-done">
-				All photos have been geo-tagged!
+				No photos in this collection yet.
 			</div>
 		{:else}
 			<div class="photo-list">
-				{#each untaggedPhotos as photo (photo.id)}
+				{#each localAllPhotos as photo (photo.id)}
 					<!-- svelte-ignore a11y_click_events_have_key_events -->
 					<div
 						class="photo-card"
 						class:selected={selectedIds.has(photo.id)}
+						class:tagged={photo.gpsSource !== null}
 						onclick={() => toggleSelect(photo.id)}
 						role="button"
 						tabindex="0"
 					>
-						<img src={photo.thumbnail} alt={photo.filename} loading="lazy" />
+						<div class="thumb-wrap">
+							<img src={photo.thumbnail} alt={photo.filename} loading="lazy" />
+							{#if photo.gpsSource !== null}
+								<span class="gps-dot" title="Has GPS ({photo.gpsSource})">&#x1F4CD;</span>
+							{/if}
+						</div>
 						<button class="preview-icon" onclick={(e) => openPreview(e, photo)} aria-label="Preview {photo.filename}">
 							&#128269;
 						</button>
@@ -324,10 +337,10 @@
 {#if previewPhoto}
 	<AdminPhotoLightbox
 		photo={previewPhoto}
-		photos={untaggedPhotos}
+		photos={localAllPhotos}
 		{collectionSlug}
 		onclose={() => previewPhoto = null}
-		ondeleted={(id) => { untaggedPhotos = untaggedPhotos.filter(p => p.id !== id); previewPhoto = null; }}
+		ondeleted={(id) => { localAllPhotos = localAllPhotos.filter(p => p.id !== id); previewPhoto = null; }}
 	/>
 {/if}
 
@@ -410,12 +423,35 @@
 	.photo-card:hover {
 		background: #f0f0f0;
 	}
+	.thumb-wrap {
+		position: relative;
+		flex-shrink: 0;
+	}
 	.photo-card img {
 		width: 120px;
 		height: 80px;
 		object-fit: cover;
 		border-radius: 4px;
 		flex-shrink: 0;
+		display: block;
+	}
+	.gps-dot {
+		position: absolute;
+		bottom: 2px;
+		left: 2px;
+		background: rgba(40, 167, 69, 0.95);
+		color: #fff;
+		font-size: 0.65rem;
+		padding: 1px 4px;
+		border-radius: 3px;
+		line-height: 1;
+		pointer-events: none;
+	}
+	.photo-card.tagged {
+		background: #fafffb;
+	}
+	.photo-card.tagged.selected {
+		background: #d4edda;
 	}
 	.preview-icon {
 		position: absolute;
@@ -456,6 +492,12 @@
 		border-bottom: 1px solid var(--color-border);
 		background: var(--color-surface);
 		flex-shrink: 0;
+		position: relative;
+		z-index: 5;
+	}
+	/* Google Places Autocomplete dropdown — must paint above the Google Map canvas */
+	:global(.pac-container) {
+		z-index: 10000 !important;
 	}
 	.search-input {
 		width: 100%;
@@ -499,13 +541,14 @@
 		.geotagger {
 			flex-direction: column;
 			height: auto;
-			min-height: calc(100vh - 160px); /* topbar + page header + margins */
+			/* dvh respects iOS Safari's dynamic viewport (URL bar shrinks) */
+			min-height: 100dvh;
 		}
 		.geotagger-left {
 			width: 100%;
 			border-right: none;
 			border-bottom: 1px solid var(--color-border);
-			max-height: 40vh;
+			max-height: 35vh;
 			overflow: hidden auto;
 		}
 		.geotagger-toolbar {
@@ -520,9 +563,29 @@
 		.geotagger-right {
 			width: 100%;
 			flex: 1;
+			display: flex;
+			flex-direction: column;
+			min-height: 55vh;
 		}
 		.map-area {
-			min-height: 50vh;
+			flex: 1;
+			min-height: 55vh;
+		}
+	}
+
+	@media (max-width: 640px) {
+		.geotagger-left {
+			max-height: 30vh;
+		}
+		.geotagger-toolbar {
+			padding: 8px 10px;
+		}
+		.search-bar {
+			padding: 6px 10px;
+		}
+		.geotagger-right,
+		.map-area {
+			min-height: 60vh;
 		}
 	}
 </style>
