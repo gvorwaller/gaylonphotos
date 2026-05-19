@@ -6,6 +6,7 @@
 	import { apiPost, apiPut, apiDelete } from '$lib/api.js';
 	import { invalidateAll } from '$app/navigation';
 	import Modal from '$lib/components/common/Modal.svelte';
+	import { byChronological } from '$lib/photo-sort.js';
 
 	let { data } = $props();
 
@@ -14,12 +15,7 @@
 	// Re-sync photos when navigating between collections, sorted by date
 	$effect(() => {
 		const sorted = [...(data.photos ?? [])];
-		sorted.sort((a, b) => {
-			if (!a.date && !b.date) return 0;
-			if (!a.date) return 1;
-			if (!b.date) return -1;
-			return a.date.localeCompare(b.date);
-		});
+		sorted.sort(byChronological);
 		photos = sorted;
 	});
 
@@ -248,6 +244,57 @@
 		}, hadErrors ? 5000 : 2000);
 	}
 
+	// --- Bulk AI description generation ---
+	let aiDescProgress = $state(null); // {current, total, errors}
+	let aiDescCancelled = false;
+	let selectedMissingDesc = $derived(
+		[...selectedPhotos].filter((id) => {
+			const photo = photos.find((p) => p.id === id);
+			return photo && !photo.aiDescription;
+		}).length
+	);
+	let photosMissingDesc = $derived(photos.filter((p) => !p.aiDescription).length);
+
+	async function bulkGenerateAiDesc({ targets, label = 'Generating' }) {
+		if (aiDescProgress || targets.length === 0) return;
+		aiDescCancelled = false;
+		aiDescProgress = { current: 0, total: targets.length, errors: 0, label };
+
+		// Send one photo per request — the API endpoint accepts batches but per-request
+		// progress is more useful and the server processes sequentially anyway.
+		for (let i = 0; i < targets.length; i++) {
+			if (aiDescCancelled) break;
+			const photoId = targets[i];
+			const result = await apiPost('/api/describe', {
+				collection: data.collection.slug,
+				photoIds: [photoId]
+			});
+			const item = result.ok && result.data.results?.[0];
+			if (item?.ok) {
+				const existing = photos.find((p) => p.id === photoId);
+				if (existing) handleUpdated({ ...existing, aiDescription: item.aiDescription });
+			} else {
+				aiDescProgress.errors++;
+			}
+			aiDescProgress.current = i + 1;
+		}
+
+		const delay = aiDescProgress.errors > 0 ? 4000 : 2000;
+		setTimeout(() => { aiDescProgress = null; }, delay);
+	}
+
+	function bulkGenerateForSelected() {
+		const targets = [...selectedPhotos].filter((id) => {
+			const photo = photos.find((p) => p.id === id);
+			return photo && !photo.aiDescription;
+		});
+		bulkGenerateAiDesc({ targets, label: 'Generating descriptions' });
+	}
+
+	function cancelAiDesc() {
+		aiDescCancelled = true;
+	}
+
 	// --- Auto-ID ---
 	let unidentifiedPhotos = $derived(
 		data.collection.type === 'wildlife' ? photos.filter((p) => !p.species) : []
@@ -465,6 +512,24 @@
 			<button class="btn btn-outline btn-sm" onclick={() => showDuplicates = true}>
 				Find Duplicates
 			</button>
+			{#if photosMissingDesc > 0 && !aiDescProgress}
+				<button
+					class="btn btn-outline btn-sm"
+					onclick={() => bulkGenerateAiDesc({ targets: photos.filter((p) => !p.aiDescription).map((p) => p.id), label: 'Generating descriptions' })}
+					title="Generate AI descriptions for all photos that don't have one"
+				>
+					✨ Describe {photosMissingDesc} photo{photosMissingDesc !== 1 ? 's' : ''}
+				</button>
+			{/if}
+			{#if aiDescProgress && !selectMode}
+				<span class="auto-id-progress">
+					{aiDescProgress.label}... {aiDescProgress.current}/{aiDescProgress.total}
+					{#if aiDescProgress.errors > 0}
+						({aiDescProgress.errors} failed)
+					{/if}
+				</span>
+				<button class="btn btn-outline btn-sm" onclick={cancelAiDesc}>Stop</button>
+			{/if}
 			{#if untaggedCount > 0}
 				<a href="/admin/{data.collection.slug}/geotag" class="btn btn-outline btn-sm">
 					Geo-tag {untaggedCount} photo{untaggedCount !== 1 ? 's' : ''}
@@ -556,8 +621,21 @@
 							({clearGpsProgress.errors} failed)
 						{/if}
 					</span>
+				{:else if aiDescProgress}
+					<span class="batch-progress">
+						{aiDescProgress.label}... {aiDescProgress.current}/{aiDescProgress.total}
+						{#if aiDescProgress.errors > 0}
+							({aiDescProgress.errors} failed)
+						{/if}
+						<button class="btn btn-outline btn-xs" onclick={cancelAiDesc}>Stop</button>
+					</span>
 				{:else if selectedCount > 0}
 					<div class="batch-bar-right">
+						{#if selectedMissingDesc > 0}
+							<button class="btn btn-outline btn-sm" onclick={bulkGenerateForSelected} title="Generate AI descriptions for selected photos that don't have one">
+								✨ Generate AI desc ({selectedMissingDesc})
+							</button>
+						{/if}
 						{#if selectedWithGps > 0}
 							<button class="btn btn-outline btn-sm" onclick={() => showClearGpsConfirm = true}>
 								Clear GPS ({selectedWithGps})

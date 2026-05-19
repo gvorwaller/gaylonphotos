@@ -123,6 +123,28 @@
 		onupdated?.(item.photo);
 	}
 
+	let regenerating = $state(false);
+
+	async function regenerateAiDescription() {
+		regenerating = true;
+		error = '';
+		const result = await apiPost('/api/describe', {
+			collection: collectionSlug,
+			photoIds: [photo.id]
+		});
+		regenerating = false;
+		if (!result.ok) {
+			error = result.error || 'Description generation failed';
+			return;
+		}
+		const item = result.data.results?.[0];
+		if (!item?.ok) {
+			error = item?.error || 'Description generation failed';
+			return;
+		}
+		onupdated?.({ ...photo, aiDescription: item.aiDescription });
+	}
+
 	async function confirmDelete() {
 		const result = await apiDelete('/api/photos', {
 			collection: collectionSlug,
@@ -144,6 +166,9 @@
 			<img src={photo.thumbnail} alt={photo.filename} />
 			{#if photo.type === 'video'}
 				<span class="video-badge">&#9654; Video</span>
+			{/if}
+			{#if !photo.aiDescription}
+				<span class="missing-ai-badge" title="No AI description">✨</span>
 			{/if}
 		</button>
 		<div class="editor-meta">
@@ -172,6 +197,26 @@
 			<span>Description</span>
 			<textarea bind:value={description} rows="2"></textarea>
 		</label>
+
+		<div class="field">
+			<div class="ai-desc-header">
+				<span class="field-label">AI Description</span>
+				<button
+					type="button"
+					class="btn btn-outline btn-sm"
+					onclick={regenerateAiDescription}
+					disabled={regenerating}
+					title="Regenerate AI description from the photo"
+				>
+					{regenerating ? 'Generating...' : photo.aiDescription ? '✨ Regenerate' : '✨ Generate'}
+				</button>
+			</div>
+			{#if photo.aiDescription}
+				<p class="ai-desc-text">{photo.aiDescription}</p>
+			{:else}
+				<p class="ai-desc-empty">No AI description yet.</p>
+			{/if}
+		</div>
 
 		<div class="field">
 			<span class="field-label">Links</span>
@@ -265,6 +310,7 @@
 		text-align: center;
 	}
 	.preview-btn {
+		position: relative;
 		background: none;
 		border: none;
 		padding: 0;
@@ -274,6 +320,18 @@
 	}
 	.preview-btn:hover {
 		opacity: 0.8;
+	}
+	.missing-ai-badge {
+		position: absolute;
+		top: 4px;
+		right: 4px;
+		font-size: 0.8rem;
+		background: rgba(255, 193, 7, 0.92);
+		color: #5c4400;
+		border-radius: 3px;
+		padding: 0 4px;
+		line-height: 1.3;
+		pointer-events: none;
 	}
 	.editor-preview img {
 		width: 100px;
@@ -314,6 +372,29 @@
 	}
 	.gps-tagged { color: var(--color-primary); }
 	.gps-untagged { color: var(--color-warning, #f0ad4e); }
+	.ai-desc-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 8px;
+		margin-bottom: 4px;
+	}
+	.ai-desc-text {
+		margin: 0;
+		padding: 6px 10px;
+		background: #f5f9ff;
+		border: 1px solid #cfe1f6;
+		border-radius: var(--radius-sm);
+		font-size: 0.82rem;
+		line-height: 1.4;
+		color: var(--color-text);
+	}
+	.ai-desc-empty {
+		margin: 0;
+		font-size: 0.78rem;
+		color: var(--color-text-muted);
+		font-style: italic;
+	}
 	.editor-fields {
 		flex: 1;
 		display: flex;
