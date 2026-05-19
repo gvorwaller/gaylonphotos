@@ -215,13 +215,17 @@
 		};
 	}
 
-	// Global callback for InfoWindow button (InfoWindow content is raw HTML)
-	if (typeof window !== 'undefined') {
+	// Global callback for InfoWindow button (InfoWindow content is raw HTML).
+	// Re-bind on every collectionSlug change so client-side navigation between
+	// collections doesn't leave a stale slug captured in the closure.
+	$effect(() => {
+		if (typeof window === 'undefined') return;
+		const slug = collectionSlug;
 		window.__clearGeotagGps__ = async (photoId) => {
 			if (clearingGps) return;
 			clearingGps = true;
 			const result = await apiPut('/api/photos', {
-				collection: collectionSlug,
+				collection: slug,
 				photoId,
 				updates: { gps: null, gpsSource: null, locationName: null }
 			});
@@ -235,7 +239,10 @@
 				error = result.error || 'Failed to clear GPS';
 			}
 		};
-	}
+		return () => {
+			if (window.__clearGeotagGps__) delete window.__clearGeotagGps__;
+		};
+	});
 </script>
 
 <div class="geotagger">

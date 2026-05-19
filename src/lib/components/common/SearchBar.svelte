@@ -98,16 +98,22 @@
 
 	{#if results && results.length > 0}
 		<div class="search-results">
-			{#each results as result (result.id + result.collection)}
+			{#each results as result, i (result.id + result.collection)}
+				{@const summary = result.aiDescription || result.description || result.id}
+				{@const shortSummary = summary.length > 80 ? summary.slice(0, 80) + '…' : summary}
 				<div class="search-result-card">
-					<button class="search-result-btn" onclick={() => (lightboxPhoto = result)} aria-label="View photo">
-						<img src={result.thumbnail} alt="" loading="lazy" class="search-thumb" />
+					<button
+						class="search-result-btn"
+						onclick={() => (lightboxPhoto = result)}
+						aria-label={`Open lightbox for result ${i + 1} of ${results.length}: ${shortSummary}`}
+					>
+						<img src={result.thumbnail} alt={shortSummary} loading="lazy" class="search-thumb" />
 					</button>
 					<a
 						href="/{result.collection}/photo/{result.id}"
 						class="search-result-detail"
 						title="Open photo detail page"
-						aria-label="Open photo detail page"
+						aria-label={`Open detail page for ${shortSummary}`}
 					>&#x2197;</a>
 					<div class="search-result-info">
 						{#if !collection}
