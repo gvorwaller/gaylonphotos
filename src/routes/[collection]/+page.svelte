@@ -334,17 +334,12 @@
 		cursor: pointer;
 		user-select: none;
 	}
-	.section-toggle:hover .toggle-hint {
-		opacity: 1;
-	}
 	.section-toggle .section-label {
 		margin-bottom: 0;
 	}
 	.toggle-hint {
 		font-size: 0.7rem;
 		color: var(--color-text-muted);
-		opacity: 0;
-		transition: opacity 0.15s;
 	}
 	.toggle-chevron {
 		font-size: 0.6rem;
