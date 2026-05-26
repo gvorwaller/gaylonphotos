@@ -33,6 +33,7 @@
 	let mapBounds = $state(null);
 	let mapFilterActive = $state(false);
 	let showAncestryOnMap = $state(untrack(() => initialAncestryToggle(_initSlug, data)));
+	let timelineExpanded = $state(untrack(() => ssGet(`timeline-expanded-${_initSlug}`) !== 'false'));
 	let prevSlug; // Plain let, not $state — must not trigger effect re-runs
 
 	// Restore last map position only when back-navigating from a photo detail view.
@@ -51,6 +52,7 @@
 			mapFilterActive = false;
 			// Restore per-collection sessionStorage state rather than blanket reset
 			showAncestryOnMap = initialAncestryToggle(currentSlug, data);
+			timelineExpanded = ssGet(`timeline-expanded-${currentSlug}`) !== 'false';
 			const fromDetail = ssGet(`${currentSlug}_fromDetail`) === '1';
 			if (fromDetail) sessionStorage.removeItem(`${currentSlug}_fromDetail`);
 			const savedPos = fromDetail ? ssGet(`map-pos-${currentSlug}`) : null;
@@ -63,6 +65,9 @@
 	// the restored value is already applied before we write to sessionStorage)
 	$effect(() => {
 		ssSet(`ancestry-toggle-${data.collection.slug}`, String(showAncestryOnMap));
+	});
+	$effect(() => {
+		ssSet(`timeline-expanded-${data.collection.slug}`, String(timelineExpanded));
 	});
 
 	// Handle ?mapLat=&mapLng= query params (from "Show on Map" in photo detail)
@@ -169,13 +174,19 @@
 			</section>
 
 			<section style="margin-top: 32px;">
-				<h2 class="section-label">Timeline</h2>
-				<Timeline
-					photos={data.photos}
-					stops={data.itinerary?.stops ?? []}
-					collectionSlug={data.collection.slug}
-					ongotolocation={(target) => { gotoTarget = target; mapFilterActive = true; }}
-				/>
+				<button class="section-toggle" onclick={() => timelineExpanded = !timelineExpanded}>
+					<h2 class="section-label">Timeline</h2>
+					<span class="toggle-hint">{timelineExpanded ? 'click to collapse' : 'click to expand'}</span>
+					<span class="toggle-chevron" class:rotated={timelineExpanded}>&#x25B6;</span>
+				</button>
+				{#if timelineExpanded}
+					<Timeline
+						photos={data.photos}
+						stops={data.itinerary?.stops ?? []}
+						collectionSlug={data.collection.slug}
+						ongotolocation={(target) => { gotoTarget = target; mapFilterActive = true; }}
+					/>
+				{/if}
 			</section>
 		{/if}
 
@@ -312,5 +323,35 @@
 		color: var(--color-text-muted);
 		font-size: 0.85rem;
 		margin: 4px 0 8px;
+	}
+	.section-toggle {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		background: none;
+		border: none;
+		padding: 0;
+		cursor: pointer;
+		user-select: none;
+	}
+	.section-toggle:hover .toggle-hint {
+		opacity: 1;
+	}
+	.section-toggle .section-label {
+		margin-bottom: 0;
+	}
+	.toggle-hint {
+		font-size: 0.7rem;
+		color: var(--color-text-muted);
+		opacity: 0;
+		transition: opacity 0.15s;
+	}
+	.toggle-chevron {
+		font-size: 0.6rem;
+		color: var(--color-text-muted);
+		transition: transform 0.2s;
+	}
+	.toggle-chevron.rotated {
+		transform: rotate(90deg);
 	}
 </style>
