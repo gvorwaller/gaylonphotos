@@ -170,7 +170,7 @@ No changes needed — already links Photos and AppKit frameworks.
 
 ```bash
 swift build
-printf 'REDACTED_UPLOAD_USER\nREDACTED_UPLOAD_PASS\n' | swift run photo-uploader --collection scandinavia-2023 --prod
+printf '<user>\n<pass>\n' | swift run photo-uploader --collection scandinavia-2023 --prod
 ```
 
 Expected: photos export and upload within seconds (not hanging). Each photo should show progress like `[1/5] IMG_4069.HEIC ... ✓`.
