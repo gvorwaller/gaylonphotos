@@ -38,7 +38,7 @@ export function ensureGoogleMapsLoaded(apiKey) {
 
 	loadPromise = new Promise((resolve, reject) => {
 		const script = document.createElement('script');
-		script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=marker,places&loading=async`;
+		script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=marker,places`;
 		script.async = true;
 		script.onload = () => {
 			if (window.google?.maps) {

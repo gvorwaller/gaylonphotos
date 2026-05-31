@@ -95,7 +95,7 @@
 		}
 
 		const script = document.createElement('script');
-		script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&libraries=marker,places&loading=async`;
+		script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&libraries=marker,places`;
 		script.async = true;
 		script.onload = () => { apiLoaded = true; };
 		script.onerror = () => { console.error('Failed to load Google Maps API'); };
