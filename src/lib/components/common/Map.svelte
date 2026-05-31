@@ -1,5 +1,6 @@
 <script>
 	import { untrack } from 'svelte';
+	import { PUBLIC_GOOGLE_MAPS_MAP_ID } from '$env/static/public';
 	/**
 	 * Base Google Maps wrapper component.
 	 * Loads the Maps JavaScript API and renders an interactive map.
@@ -108,13 +109,18 @@
 		if (!apiLoaded || !mapContainer) return;
 		if (map) return; // already initialized
 
-		map = new google.maps.Map(mapContainer, {
+		const mapOptions = {
 			center,
 			zoom,
 			mapTypeControl: true,
 			streetViewControl: false,
 			fullscreenControl: true
-		});
+		};
+		// AdvancedMarkerElement requires a valid Map ID or pins won't render.
+		// Provided via PUBLIC_GOOGLE_MAPS_MAP_ID (.env) — must also be set in the
+		// droplet's .env since `npm run build` runs server-side and inlines PUBLIC_* vars.
+		if (PUBLIC_GOOGLE_MAPS_MAP_ID) mapOptions.mapId = PUBLIC_GOOGLE_MAPS_MAP_ID;
+		map = new google.maps.Map(mapContainer, mapOptions);
 
 		// InfoWindow created once at mount — infoWindowEnabled cannot change dynamically
 		if (infoWindowEnabled) {
