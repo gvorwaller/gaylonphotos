@@ -95,7 +95,7 @@
 		}
 
 		const script = document.createElement('script');
-		script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&libraries=marker,places`;
+		script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&libraries=marker,places&loading=async`;
 		script.async = true;
 		script.onload = () => { apiLoaded = true; };
 		script.onerror = () => { console.error('Failed to load Google Maps API'); };
@@ -111,7 +111,7 @@
 		map = new google.maps.Map(mapContainer, {
 			center,
 			zoom,
-			mapId: 'DEMO_MAP_ID',
+			mapId: '9ff2c76a31d20582e22f6766',
 			mapTypeControl: true,
 			streetViewControl: false,
 			fullscreenControl: true
