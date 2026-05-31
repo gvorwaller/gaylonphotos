@@ -310,6 +310,7 @@
 				markers={markers}
 				clickable={true}
 				infoWindowEnabled={true}
+				loadPlaces={true}
 				onmapclick={handleMapClick}
 				onmarkerclick={handleMarkerClick}
 				onmapready={handleMapReady}

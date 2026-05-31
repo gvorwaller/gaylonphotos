@@ -1,6 +1,7 @@
 <script>
 	import { untrack } from 'svelte';
 	import { PUBLIC_GOOGLE_MAPS_MAP_ID } from '$env/static/public';
+	import { loadGoogleMaps } from '$lib/google-maps.js';
 	/**
 	 * Base Google Maps wrapper component.
 	 * Loads the Maps JavaScript API and renders an interactive map.
@@ -34,6 +35,7 @@
 		onboundschange = null,
 		infoWindowEnabled = false,
 		searchable = false,
+		loadPlaces = false,
 		gotoTarget = null
 	} = $props();
 
@@ -45,8 +47,11 @@
 	let googlePolylines = [];
 	let infoWindowInstance = null;
 	let searchAutocomplete = null;
+	let markerLibrary = null;
+	let placesLibrary = null;
 	let apiLoaded = $state(false);
 	let initialFitDone = false; // Not reactive — one-shot flag read inside effect
+	let markerFallbackWarned = false;
 
 	/**
 	 * Creates a colored marker DOM element for AdvancedMarkerElement content.
@@ -74,34 +79,52 @@
 		return div;
 	}
 
+	function getLegacyMarkerIcon(color, shape = 'circle') {
+		if (!color) return undefined;
+		const symbolPath = shape === 'diamond'
+			? 'M 0,-8 8,0 0,8 -8,0 z'
+			: google.maps.SymbolPath.CIRCLE;
+		return {
+			path: symbolPath,
+			fillColor: color,
+			fillOpacity: 1,
+			strokeColor: '#fff',
+			strokeWeight: 2,
+			scale: shape === 'diamond' ? 1 : 8
+		};
+	}
+
+	function clearGoogleMarker(entry) {
+		const { marker, handler, contentEl, listener } = entry;
+		if (marker.removeEventListener) marker.removeEventListener('gmp-click', handler);
+		if (contentEl) contentEl.removeEventListener('click', handler);
+		if (listener?.remove) listener.remove();
+		if (typeof marker.setMap === 'function') {
+			marker.setMap(null);
+		} else {
+			marker.map = null;
+		}
+	}
+
 	// Load Google Maps API
 	$effect(() => {
 		if (!apiKey) return;
-		if (window.google?.maps) {
-			apiLoaded = true;
-			return;
-		}
+		let cancelled = false;
+		const libraries = ['maps', 'marker'];
+		if (searchable || loadPlaces) libraries.push('places');
 
-		// Check if script is already being loaded
-		if (document.querySelector('script[src*="maps.googleapis.com"]')) {
-			const check = setInterval(() => {
-				if (window.google?.maps) {
-					apiLoaded = true;
-					clearInterval(check);
-				}
-			}, 100);
-			// Safety timeout: stop polling after 30s if API never loads
-			const timeout = setTimeout(() => clearInterval(check), 30000);
-			return () => { clearInterval(check); clearTimeout(timeout); };
-		}
+		loadGoogleMaps(apiKey, libraries)
+			.then(({ marker, places }) => {
+				if (cancelled) return;
+				markerLibrary = marker || window.google?.maps?.marker || null;
+				placesLibrary = places || window.google?.maps?.places || null;
+				apiLoaded = true;
+			})
+			.catch((err) => {
+				if (!cancelled) console.error('Failed to load Google Maps API:', err);
+			});
 
-		const script = document.createElement('script');
-		script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&libraries=marker,places`;
-		script.async = true;
-		script.onload = () => { apiLoaded = true; };
-		script.onerror = () => { console.error('Failed to load Google Maps API'); };
-		document.head.appendChild(script);
-		return () => { script.onload = null; script.onerror = null; };
+		return () => { cancelled = true; };
 	});
 
 	// Initialize map when API is loaded
@@ -160,10 +183,10 @@
 
 	// Places Autocomplete for search overlay
 	$effect(() => {
-		if (!searchable || !map || !searchInput || !window.google?.maps?.places) return;
+		if (!searchable || !map || !searchInput || !placesLibrary) return;
 		if (searchAutocomplete) return;
 
-		searchAutocomplete = new google.maps.places.Autocomplete(searchInput, {
+		searchAutocomplete = new placesLibrary.Autocomplete(searchInput, {
 			fields: ['geometry', 'name']
 		});
 		searchAutocomplete.bindTo('bounds', map);
@@ -188,13 +211,9 @@
 		// Add new markers
 		for (const m of markers) {
 			const contentEl = m.color ? createColoredMarkerElement(m.color, m.shape) : null;
-			const marker = new google.maps.marker.AdvancedMarkerElement({
-				position: { lat: m.lat, lng: m.lng },
-				map,
-				title: m.label || '',
-				...(currentOnMarkerClick ? { gmpClickable: true } : {}),
-				...(contentEl ? { content: contentEl } : {})
-			});
+			const AdvancedMarkerElement = markerLibrary?.AdvancedMarkerElement;
+			const canUseAdvancedMarker = PUBLIC_GOOGLE_MAPS_MAP_ID && AdvancedMarkerElement;
+			let marker;
 
 			const handleClick = () => {
 				if (!currentOnMarkerClick) return;
@@ -212,10 +231,34 @@
 				}
 			};
 
-			marker.addEventListener('gmp-click', handleClick);
-			if (contentEl) contentEl.addEventListener('click', handleClick);
+			let listener = null;
+			if (canUseAdvancedMarker) {
+				marker = new AdvancedMarkerElement({
+					position: { lat: m.lat, lng: m.lng },
+					map,
+					title: m.label || '',
+					...(currentOnMarkerClick ? { gmpClickable: true } : {}),
+					...(contentEl ? { content: contentEl } : {})
+				});
+				marker.addEventListener('gmp-click', handleClick);
+				if (contentEl) contentEl.addEventListener('click', handleClick);
+			} else {
+				if (!markerFallbackWarned) {
+					console.warn('Advanced Google Maps markers unavailable; using classic Marker fallback.');
+					markerFallbackWarned = true;
+				}
+				marker = new google.maps.Marker({
+					position: { lat: m.lat, lng: m.lng },
+					map,
+					title: m.label || '',
+					icon: getLegacyMarkerIcon(m.color, m.shape)
+				});
+				if (currentOnMarkerClick) {
+					listener = marker.addListener('click', handleClick);
+				}
+			}
 
-			googleMarkers.push({ marker, handler: handleClick, contentEl });
+			googleMarkers.push({ marker, handler: handleClick, contentEl, listener });
 		}
 
 		// Auto-fit bounds only on initial load (don't fight user panning).
@@ -236,11 +279,7 @@
 		}
 
 		return () => {
-			for (const { marker, handler, contentEl } of googleMarkers) {
-				marker.removeEventListener('gmp-click', handler);
-				if (contentEl) contentEl.removeEventListener('click', handler);
-				marker.map = null;
-			}
+			for (const markerEntry of googleMarkers) clearGoogleMarker(markerEntry);
 			googleMarkers = [];
 		};
 	});
@@ -381,10 +420,14 @@
 		width: 100%;
 		height: 100%;
 		min-height: 300px;
+		display: flex;
+		flex-direction: column;
 	}
 	.map-container {
+		flex: 1;
 		width: 100%;
 		height: 100%;
+		min-height: 300px;
 		border-radius: var(--radius-md, 8px);
 	}
 	.map-search {

@@ -299,6 +299,7 @@
 				{markers}
 				polylines={editorPolylines}
 				clickable={true}
+				loadPlaces={true}
 				onmapclick={handleMapClick}
 				onmapready={handleMapReady}
 			/>

@@ -1,62 +1,13 @@
+import { loadGoogleMaps } from '$lib/google-maps.js';
+
+let geocoderInstance = null;
+
 /**
  * Client-side reverse geocoding using Google Maps Geocoder.
  * Requires the Geocoding API to be enabled in the Google Cloud project.
  */
-
-let loadPromise = null;
-let geocoderInstance = null;
-
-/**
- * Ensures the Google Maps JS API is loaded. Returns immediately if already
- * available, otherwise injects the script tag and waits. Prevents duplicate loads.
- */
 export function ensureGoogleMapsLoaded(apiKey) {
-	if (typeof window === 'undefined') return Promise.reject(new Error('Not in browser'));
-
-	if (window.google?.maps) return Promise.resolve();
-
-	if (loadPromise) return loadPromise;
-
-	// Check if a script tag already exists (e.g. from Map.svelte)
-	if (document.querySelector('script[src*="maps.googleapis.com"]')) {
-		loadPromise = new Promise((resolve, reject) => {
-			const timeout = setTimeout(() => {
-				clearInterval(check);
-				loadPromise = null;
-				reject(new Error('Google Maps API load timeout'));
-			}, 30000);
-			const check = setInterval(() => {
-				if (window.google?.maps) {
-					clearInterval(check);
-					clearTimeout(timeout);
-					resolve();
-				}
-			}, 100);
-		});
-		return loadPromise;
-	}
-
-	loadPromise = new Promise((resolve, reject) => {
-		const script = document.createElement('script');
-		script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=marker,places`;
-		script.async = true;
-		script.onload = () => {
-			if (window.google?.maps) {
-				resolve();
-			} else {
-				// Script loaded but API failed to initialize
-				loadPromise = null;
-				reject(new Error('Google Maps API loaded but not initialized'));
-			}
-		};
-		script.onerror = () => {
-			loadPromise = null;
-			reject(new Error('Failed to load Google Maps API'));
-		};
-		document.head.appendChild(script);
-	});
-
-	return loadPromise;
+	return loadGoogleMaps(apiKey, ['geocoding']);
 }
 
 /**
@@ -92,10 +43,11 @@ function findComponent(results, type) {
  */
 export async function reverseGeocode(lat, lng, apiKey) {
 	try {
-		await ensureGoogleMapsLoaded(apiKey);
+		const { google, geocoding } = await ensureGoogleMapsLoaded(apiKey);
 
 		if (!geocoderInstance) {
-			geocoderInstance = new window.google.maps.Geocoder();
+			const Geocoder = geocoding?.Geocoder || google.maps.Geocoder;
+			geocoderInstance = new Geocoder();
 		}
 		const response = await geocoderInstance.geocode({ location: { lat, lng } });
 
