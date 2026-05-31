@@ -111,7 +111,6 @@
 		map = new google.maps.Map(mapContainer, {
 			center,
 			zoom,
-			mapId: '9ff2c76a31d20582e22f6766',
 			mapTypeControl: true,
 			streetViewControl: false,
 			fullscreenControl: true
