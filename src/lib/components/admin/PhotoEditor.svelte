@@ -8,7 +8,7 @@
 	import Modal from '$lib/components/common/Modal.svelte';
 	import AdminPhotoLightbox from '$lib/components/admin/AdminPhotoLightbox.svelte';
 
-	let { photo, collectionSlug = '', collectionType = 'travel', apiKey = '', onupdated = null, ondeleted = null, onpreview = null } = $props();
+	let { photo, collectionSlug = '', collectionType = 'travel', apiKey = '', isCoverPhoto = false, onupdated = null, ondeleted = null, onpreview = null, onsetcover = null } = $props();
 
 	// Track whether we've already geocoded this photo to prevent re-firing (intentionally not $state)
 	let hasGeocoded = false;
@@ -280,6 +280,11 @@
 			<button class="btn btn-sm" class:btn-primary={!saved} class:btn-saved={saved} onclick={save} disabled={saving || identifying}>
 				{saving ? 'Saving...' : saved ? 'Saved!' : 'Save'}
 			</button>
+			{#if isCoverPhoto}
+				<span class="cover-badge">Cover Photo</span>
+			{:else}
+				<button class="btn btn-outline btn-sm" onclick={() => onsetcover?.(photo.id)}>Set as Cover</button>
+			{/if}
 			<button class="btn btn-danger btn-sm" onclick={() => showDeleteConfirm = true}>
 				Delete
 			</button>
@@ -481,6 +486,14 @@
 		cursor: default;
 	}
 
+	.cover-badge {
+		font-size: 0.75rem;
+		font-weight: 700;
+		color: #856404;
+		background: #fff3cd;
+		padding: 4px 10px;
+		border-radius: var(--radius-sm);
+	}
 	.species-row {
 		display: flex;
 		gap: 8px;

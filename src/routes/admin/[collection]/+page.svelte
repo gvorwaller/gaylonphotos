@@ -12,11 +12,12 @@
 
 	let photos = $state([]);
 
-	// Re-sync photos when navigating between collections, sorted by date
+	// Re-sync photos and cover when navigating between collections, sorted by date
 	$effect(() => {
 		const sorted = [...(data.photos ?? [])];
 		sorted.sort(byChronological);
 		photos = sorted;
+		coverPhotoId = data.collection.heroImage ?? null;
 	});
 
 	function handleUploaded(photo) {
@@ -36,6 +37,18 @@
 		photos = photos.filter((p) => p.id !== photoId);
 		selectedPhotos.delete(photoId);
 		selectedPhotos = new Set(selectedPhotos);
+	}
+
+	let coverPhotoId = $state(null);
+
+	async function setCoverPhoto(photoId) {
+		const result = await apiPut('/api/collections', {
+			slug: data.collection.slug,
+			updates: { heroImage: photoId }
+		});
+		if (result.ok) {
+			coverPhotoId = photoId;
+		}
 	}
 
 	let untaggedCount = $derived(photos.filter((p) => p.gpsSource === null).length);
@@ -677,9 +690,11 @@
 									collectionSlug={data.collection.slug}
 									collectionType={data.collection.type}
 									apiKey={data.googleMapsApiKey}
+									isCoverPhoto={photo.id === coverPhotoId}
 									onupdated={handleUpdated}
 									ondeleted={() => handleDeleted(photo.id)}
 									onpreview={handlePreview}
+									onsetcover={setCoverPhoto}
 								/>
 							</div>
 						</div>
@@ -689,9 +704,11 @@
 							collectionSlug={data.collection.slug}
 							collectionType={data.collection.type}
 							apiKey={data.googleMapsApiKey}
+							isCoverPhoto={photo.id === coverPhotoId}
 							onupdated={handleUpdated}
 							ondeleted={() => handleDeleted(photo.id)}
 							onpreview={handlePreview}
+							onsetcover={setCoverPhoto}
 						/>
 					{/if}
 				{/each}

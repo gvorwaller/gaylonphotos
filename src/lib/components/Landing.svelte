@@ -8,8 +8,11 @@
 	let { collections = [], photosByCollection = {}, photoCounts = {} } = $props();
 
 	function getHeroUrl(collection) {
-		// Use hero image if set, otherwise first photo's thumbnail
 		const photos = photosByCollection[collection.slug] || [];
+		if (collection.heroImage) {
+			const hero = photos.find((p) => p.id === collection.heroImage);
+			if (hero) return hero.thumbnail;
+		}
 		if (photos.length > 0) return photos[0].thumbnail;
 		return null;
 	}
