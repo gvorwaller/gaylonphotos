@@ -32,3 +32,16 @@ if [ "$STATUS" = "200" ]; then
 else
   echo "WARNING: https://gaylon.photos/ returned $STATUS — check logs with: sshDO 'pm2 logs gaylonphotos --lines 30'"
 fi
+
+GEOCODE_STATUS=$(curl -s -o /tmp/gaylonphotos-geocode-check.json -w "%{http_code}" \
+  -X POST https://gaylon.photos/api/geocode \
+  -H "Content-Type: application/json" \
+  -H "Origin: https://gaylon.photos" \
+  --data '{"query":"florida"}')
+if [ "$GEOCODE_STATUS" = "200" ]; then
+  echo "Geocode check successful — /api/geocode returned $GEOCODE_STATUS"
+else
+  echo "WARNING: /api/geocode returned $GEOCODE_STATUS — response:"
+  cat /tmp/gaylonphotos-geocode-check.json
+  echo
+fi
