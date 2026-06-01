@@ -404,6 +404,7 @@
 				class="map-search-input"
 				placeholder="Search for a place..."
 			/>
+			<button type="submit" class="map-search-button">Search</button>
 			{#if searchError}
 				<div class="map-search-error">{searchError}</div>
 			{/if}
@@ -436,10 +437,15 @@
 		top: 10px;
 		left: 50%;
 		transform: translateX(-50%);
-		z-index: 1;
-		width: min(320px, calc(100% - 100px));
+		z-index: 10;
+		display: flex;
+		gap: 6px;
+		align-items: flex-start;
+		width: min(420px, calc(100% - 100px));
 	}
 	.map-search-input {
+		flex: 1 1 auto;
+		min-width: 0;
 		width: 100%;
 		padding: 8px 12px;
 		border: 1px solid var(--color-border, #e9ecef);
@@ -454,7 +460,22 @@
 		border-color: var(--color-primary, #28a745);
 		box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15), 0 0 0 3px rgba(40, 167, 69, 0.15);
 	}
+	.map-search-button {
+		flex: 0 0 auto;
+		padding: 8px 10px;
+		border: 1px solid var(--color-border, #e9ecef);
+		border-radius: var(--radius-sm, 4px);
+		background: #fff;
+		color: var(--color-text, #212529);
+		font-size: 0.8rem;
+		font-weight: 700;
+		cursor: pointer;
+		box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+	}
 	.map-search-error {
+		position: absolute;
+		top: 100%;
+		left: 0;
 		margin-top: 4px;
 		padding: 4px 8px;
 		background: #fff;

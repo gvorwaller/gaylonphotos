@@ -289,8 +289,15 @@
 
 	<div class="editor-right">
 		<form class="search-bar" onsubmit={handlePlaceSearch}>
-			<input bind:value={searchQuery} type="text" class="search-input"
-				placeholder="Search for a place..." />
+			<div class="search-row">
+				<input
+					bind:value={searchQuery}
+					type="text"
+					class="search-input"
+					placeholder="Search for a place..."
+				/>
+				<button type="submit" class="btn btn-outline btn-sm">Search</button>
+			</div>
 			{#if searchError}
 				<div class="search-error">{searchError}</div>
 			{/if}
@@ -346,7 +353,14 @@
 		background: var(--color-surface);
 		flex-shrink: 0;
 	}
+	.search-row {
+		display: flex;
+		gap: 8px;
+		align-items: center;
+	}
 	.search-input {
+		flex: 1;
+		min-width: 0;
 		width: 100%;
 		padding: 8px 12px;
 		border: 1px solid var(--color-border);
