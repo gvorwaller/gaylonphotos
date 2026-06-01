@@ -6,7 +6,6 @@
 	import GoogleMap from '$lib/components/common/Map.svelte';
 	import Modal from '$lib/components/common/Modal.svelte';
 	import { apiPut, apiPost, apiDelete } from '$lib/api.js';
-	import { geocodePlaceQuery } from '$lib/geocoding.js';
 
 	let { collectionSlug, itinerary = null, apiKey = '', onupdated = null } = $props();
 
@@ -38,14 +37,18 @@
 
 		searchError = '';
 		try {
-			const result = await geocodePlaceQuery(searchQuery, apiKey);
-			if (!result) {
-				searchError = 'Place not found';
+			const result = await apiPost('/api/geocode', { query: searchQuery });
+			if (!result.ok) {
+				searchError = result.error || 'Search failed';
 				return;
 			}
-			const { lat, lng, viewport } = result;
+			const { lat, lng, bounds: viewport } = result.data;
 			if (viewport) {
-				mapInstance.fitBounds(viewport);
+				const bounds = new google.maps.LatLngBounds(
+					viewport.southwest,
+					viewport.northeast
+				);
+				mapInstance.fitBounds(bounds);
 			} else {
 				mapInstance.setCenter({ lat, lng });
 				mapInstance.setZoom(14);

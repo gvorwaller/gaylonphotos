@@ -8,7 +8,7 @@
 	 */
 	import GoogleMap from '$lib/components/common/Map.svelte';
 	import { apiPost, apiPut } from '$lib/api.js';
-	import { geocodePlaceQuery, reverseGeocode } from '$lib/geocoding.js';
+	import { reverseGeocode } from '$lib/geocoding.js';
 	import AdminPhotoLightbox from '$lib/components/admin/AdminPhotoLightbox.svelte';
 
 	let { collectionSlug, photos = [], apiKey = '' } = $props();
@@ -46,24 +46,25 @@
 		if (!mapInstance || !searchQuery.trim()) return;
 
 		searchError = '';
-		try {
-			const result = await geocodePlaceQuery(searchQuery, apiKey);
-			if (!result) {
-				searchError = 'Place not found';
-				return;
-			}
-			const { lat, lng, viewport } = result;
-			if (viewport) {
-				mapInstance.fitBounds(viewport);
-			} else {
-				mapInstance.setCenter({ lat, lng });
-				mapInstance.setZoom(14);
-			}
-			pendingCoords = { lat, lng };
-		} catch (err) {
-			console.warn('Place search failed:', err);
-			searchError = 'Search failed';
+
+		const result = await apiPost('/api/geocode', { query: searchQuery });
+		if (!result.ok) {
+			searchError = result.error || 'Search failed';
+			return;
 		}
+
+		const { lat, lng, bounds: viewport } = result.data;
+		if (viewport) {
+			const bounds = new google.maps.LatLngBounds(
+				viewport.southwest,
+				viewport.northeast
+			);
+			mapInstance.fitBounds(bounds);
+		} else {
+			mapInstance.setCenter({ lat, lng });
+			mapInstance.setZoom(14);
+		}
+		pendingCoords = { lat, lng };
 	}
 
 	// Markers: already-tagged photos (semi-transparent context) + pending preview
