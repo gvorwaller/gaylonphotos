@@ -2,7 +2,6 @@
 	import { untrack } from 'svelte';
 	import { PUBLIC_GOOGLE_MAPS_MAP_ID } from '$env/static/public';
 	import { loadGoogleMaps } from '$lib/google-maps.js';
-	import { geocodePlaceQuery } from '$lib/geocoding.js';
 	/**
 	 * Base Google Maps wrapper component.
 	 * Loads the Maps JavaScript API and renders an interactive map.
@@ -183,13 +182,23 @@
 
 		searchError = '';
 		try {
-			const result = await geocodePlaceQuery(searchQuery, apiKey);
-			if (!result) {
-				searchError = 'Place not found';
+			const response = await fetch('/api/geocode', {
+				method: 'POST',
+				credentials: 'same-origin',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ query: searchQuery })
+			});
+			const result = await response.json();
+			if (!response.ok) {
+				searchError = result.error || 'Search failed';
 				return;
 			}
-			if (result.viewport) {
-				map.fitBounds(result.viewport);
+			if (result.bounds) {
+				const bounds = new google.maps.LatLngBounds(
+					result.bounds.southwest,
+					result.bounds.northeast
+				);
+				map.fitBounds(bounds);
 			} else {
 				map.setCenter({ lat: result.lat, lng: result.lng });
 				map.setZoom(14);
