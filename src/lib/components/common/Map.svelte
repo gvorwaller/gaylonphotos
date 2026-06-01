@@ -2,6 +2,7 @@
 	import { untrack } from 'svelte';
 	import { PUBLIC_GOOGLE_MAPS_MAP_ID } from '$env/static/public';
 	import { loadGoogleMaps } from '$lib/google-maps.js';
+	import { geocodePlaceQuery } from '$lib/geocoding.js';
 	/**
 	 * Base Google Maps wrapper component.
 	 * Loads the Maps JavaScript API and renders an interactive map.
@@ -35,20 +36,18 @@
 		onboundschange = null,
 		infoWindowEnabled = false,
 		searchable = false,
-		loadPlaces = false,
 		gotoTarget = null
 	} = $props();
 
 	let mapContainer;
-	let searchInput = $state(null);
+	let searchQuery = $state('');
+	let searchError = $state('');
 	let map = $state(null);
 	let googleMarkers = []; // Array of { marker, handler } objects
 	let googlePolyline = null;
 	let googlePolylines = [];
 	let infoWindowInstance = null;
-	let searchAutocomplete = null;
 	let markerLibrary = null;
-	let placesLibrary = null;
 	let apiLoaded = $state(false);
 	let initialFitDone = false; // Not reactive — one-shot flag read inside effect
 	let markerFallbackWarned = false;
@@ -110,14 +109,11 @@
 	$effect(() => {
 		if (!apiKey) return;
 		let cancelled = false;
-		const libraries = ['maps', 'marker'];
-		if (searchable || loadPlaces) libraries.push('places');
 
-		loadGoogleMaps(apiKey, libraries)
-			.then(({ marker, places }) => {
+		loadGoogleMaps(apiKey, ['maps', 'marker'])
+			.then(({ marker }) => {
 				if (cancelled) return;
 				markerLibrary = marker || window.google?.maps?.marker || null;
-				placesLibrary = places || window.google?.maps?.places || null;
 				apiLoaded = true;
 			})
 			.catch((err) => {
@@ -181,26 +177,28 @@
 		}
 	});
 
-	// Places Autocomplete for search overlay
-	$effect(() => {
-		if (!searchable || !map || !searchInput || !placesLibrary) return;
-		if (searchAutocomplete) return;
+	async function handleSearch(e) {
+		e.preventDefault();
+		if (!map || !apiKey || !searchQuery.trim()) return;
 
-		searchAutocomplete = new placesLibrary.Autocomplete(searchInput, {
-			fields: ['geometry', 'name']
-		});
-		searchAutocomplete.bindTo('bounds', map);
-		searchAutocomplete.addListener('place_changed', () => {
-			const place = searchAutocomplete.getPlace();
-			if (!place.geometry?.location) return;
-			if (place.geometry.viewport) {
-				map.fitBounds(place.geometry.viewport);
+		searchError = '';
+		try {
+			const result = await geocodePlaceQuery(searchQuery, apiKey);
+			if (!result) {
+				searchError = 'Place not found';
+				return;
+			}
+			if (result.viewport) {
+				map.fitBounds(result.viewport);
 			} else {
-				map.setCenter(place.geometry.location);
+				map.setCenter({ lat: result.lat, lng: result.lng });
 				map.setZoom(14);
 			}
-		});
-	});
+		} catch (err) {
+			console.warn('Place search failed:', err);
+			searchError = 'Search failed';
+		}
+	}
 
 	// Sync markers (cleanup fn runs before re-execution, clearing old markers)
 	$effect(() => {
@@ -399,14 +397,17 @@
 
 <div class="map-wrapper">
 	{#if searchable}
-		<div class="map-search">
+		<form class="map-search" onsubmit={handleSearch}>
 			<input
-				bind:this={searchInput}
+				bind:value={searchQuery}
 				type="text"
 				class="map-search-input"
 				placeholder="Search for a place..."
 			/>
-		</div>
+			{#if searchError}
+				<div class="map-search-error">{searchError}</div>
+			{/if}
+		</form>
 	{/if}
 	<div bind:this={mapContainer} class="map-container"></div>
 	{#if !apiLoaded}
@@ -452,6 +453,15 @@
 	.map-search-input:focus {
 		border-color: var(--color-primary, #28a745);
 		box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15), 0 0 0 3px rgba(40, 167, 69, 0.15);
+	}
+	.map-search-error {
+		margin-top: 4px;
+		padding: 4px 8px;
+		background: #fff;
+		border-radius: var(--radius-sm, 4px);
+		color: var(--color-danger, #dc3545);
+		font-size: 0.75rem;
+		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
 	}
 	.map-loading {
 		position: absolute;

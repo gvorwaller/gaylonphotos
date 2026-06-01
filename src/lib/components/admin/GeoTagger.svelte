@@ -8,7 +8,7 @@
 	 */
 	import GoogleMap from '$lib/components/common/Map.svelte';
 	import { apiPost, apiPut } from '$lib/api.js';
-	import { reverseGeocode } from '$lib/geocoding.js';
+	import { geocodePlaceQuery, reverseGeocode } from '$lib/geocoding.js';
 	import AdminPhotoLightbox from '$lib/components/admin/AdminPhotoLightbox.svelte';
 
 	let { collectionSlug, photos = [], apiKey = '' } = $props();
@@ -33,44 +33,38 @@
 	let taggedCount = $derived(localAllPhotos.length - untaggedCount);
 
 	// Place search
-	let searchInput;
+	let searchQuery = $state('');
+	let searchError = $state('');
 	let mapInstance = $state(null);
-	let autocomplete = null;
 
 	function handleMapReady(map) {
 		mapInstance = map;
 	}
 
-	// Bind Places Autocomplete once map and input are both ready
-	$effect(() => {
-		if (!mapInstance || !searchInput || !window.google?.maps?.places) return;
-		if (autocomplete) return; // already bound
+	async function handlePlaceSearch(e) {
+		e.preventDefault();
+		if (!mapInstance || !searchQuery.trim()) return;
 
-		autocomplete = new google.maps.places.Autocomplete(searchInput, {
-			fields: ['geometry', 'name']
-		});
-
-		autocomplete.bindTo('bounds', mapInstance);
-
-		autocomplete.addListener('place_changed', () => {
-			const place = autocomplete.getPlace();
-			if (!place.geometry?.location) return;
-
-			const lat = place.geometry.location.lat();
-			const lng = place.geometry.location.lng();
-
-			// Pan map to the selected place
-			mapInstance.setCenter({ lat, lng });
-			if (place.geometry.viewport) {
-				mapInstance.fitBounds(place.geometry.viewport);
+		searchError = '';
+		try {
+			const result = await geocodePlaceQuery(searchQuery, apiKey);
+			if (!result) {
+				searchError = 'Place not found';
+				return;
+			}
+			const { lat, lng, viewport } = result;
+			if (viewport) {
+				mapInstance.fitBounds(viewport);
 			} else {
+				mapInstance.setCenter({ lat, lng });
 				mapInstance.setZoom(14);
 			}
-
-			// Set as pending coords — assign button is gated on both selection + coords
 			pendingCoords = { lat, lng };
-		});
-	});
+		} catch (err) {
+			console.warn('Place search failed:', err);
+			searchError = 'Search failed';
+		}
+	}
 
 	// Markers: already-tagged photos (semi-transparent context) + pending preview
 	let markers = $derived.by(() => {
@@ -294,14 +288,17 @@
 	</div>
 
 	<div class="geotagger-right">
-		<div class="search-bar">
+		<form class="search-bar" onsubmit={handlePlaceSearch}>
 			<input
-				bind:this={searchInput}
+				bind:value={searchQuery}
 				type="text"
 				class="search-input"
 				placeholder="Search for a place..."
 			/>
-		</div>
+			{#if searchError}
+				<div class="search-error">{searchError}</div>
+			{/if}
+		</form>
 		<div class="map-area">
 			<GoogleMap
 				{apiKey}
@@ -310,7 +307,6 @@
 				markers={markers}
 				clickable={true}
 				infoWindowEnabled={true}
-				loadPlaces={true}
 				onmapclick={handleMapClick}
 				onmarkerclick={handleMarkerClick}
 				onmapready={handleMapReady}
@@ -503,10 +499,6 @@
 		position: relative;
 		z-index: 5;
 	}
-	/* Google Places Autocomplete dropdown — must paint above the Google Map canvas */
-	:global(.pac-container) {
-		z-index: 10000 !important;
-	}
 	.search-input {
 		width: 100%;
 		padding: 8px 12px;
@@ -520,6 +512,12 @@
 	.search-input:focus {
 		border-color: var(--color-primary);
 		box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.15);
+	}
+	.search-error {
+		margin-top: 6px;
+		color: var(--color-danger);
+		font-size: 0.8rem;
+		font-weight: 600;
 	}
 	.map-area {
 		flex: 1;

@@ -6,6 +6,7 @@
 	import GoogleMap from '$lib/components/common/Map.svelte';
 	import Modal from '$lib/components/common/Modal.svelte';
 	import { apiPut, apiPost, apiDelete } from '$lib/api.js';
+	import { geocodePlaceQuery } from '$lib/geocoding.js';
 
 	let { collectionSlug, itinerary = null, apiKey = '', onupdated = null } = $props();
 
@@ -23,43 +24,43 @@
 	let showDeleteConfirm = $state(null); // stop index to delete
 
 	// Place search
-	let searchInput;
+	let searchQuery = $state('');
+	let searchError = $state('');
 	let mapInstance = $state(null);
-	let autocomplete = null;
 
 	function handleMapReady(map) {
 		mapInstance = map;
 	}
 
-	// Bind Places Autocomplete once map and input are both ready
-	$effect(() => {
-		if (!mapInstance || !searchInput || !window.google?.maps?.places) return;
-		if (autocomplete) return;
+	async function handlePlaceSearch(e) {
+		e.preventDefault();
+		if (!mapInstance || !searchQuery.trim()) return;
 
-		autocomplete = new google.maps.places.Autocomplete(searchInput, {
-			fields: ['geometry', 'name']
-		});
-		autocomplete.bindTo('bounds', mapInstance);
-		autocomplete.addListener('place_changed', () => {
-			const place = autocomplete.getPlace();
-			if (!place.geometry?.location) return;
-			const lat = place.geometry.location.lat();
-			const lng = place.geometry.location.lng();
-			mapInstance.setCenter({ lat, lng });
-			if (place.geometry.viewport) {
-				mapInstance.fitBounds(place.geometry.viewport);
+		searchError = '';
+		try {
+			const result = await geocodePlaceQuery(searchQuery, apiKey);
+			if (!result) {
+				searchError = 'Place not found';
+				return;
+			}
+			const { lat, lng, viewport } = result;
+			if (viewport) {
+				mapInstance.fitBounds(viewport);
 			} else {
+				mapInstance.setCenter({ lat, lng });
 				mapInstance.setZoom(14);
 			}
-			// If a stop is being edited in pick-GPS mode, auto-set its coords
 			if (editingStopIdx !== null && pickingGps) {
 				stops[editingStopIdx].lat = lat;
 				stops[editingStopIdx].lng = lng;
 				stops = [...stops];
 				pickingGps = false;
 			}
-		});
-	});
+		} catch (err) {
+			console.warn('Place search failed:', err);
+			searchError = 'Search failed';
+		}
+	}
 
 	$effect(() => {
 		tripName = itinerary?.trip?.name || '';
@@ -287,10 +288,13 @@
 	</div>
 
 	<div class="editor-right">
-		<div class="search-bar">
-			<input bind:this={searchInput} type="text" class="search-input"
+		<form class="search-bar" onsubmit={handlePlaceSearch}>
+			<input bind:value={searchQuery} type="text" class="search-input"
 				placeholder="Search for a place..." />
-		</div>
+			{#if searchError}
+				<div class="search-error">{searchError}</div>
+			{/if}
+		</form>
 		<div class="map-area">
 			<GoogleMap
 				{apiKey}
@@ -299,7 +303,6 @@
 				{markers}
 				polylines={editorPolylines}
 				clickable={true}
-				loadPlaces={true}
 				onmapclick={handleMapClick}
 				onmapready={handleMapReady}
 			/>
@@ -356,6 +359,12 @@
 	.search-input:focus {
 		border-color: var(--color-primary);
 		box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.15);
+	}
+	.search-error {
+		margin-top: 6px;
+		color: var(--color-danger);
+		font-size: 0.8rem;
+		font-weight: 600;
 	}
 	.map-area {
 		flex: 1;

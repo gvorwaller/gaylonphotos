@@ -10,6 +10,37 @@ export function ensureGoogleMapsLoaded(apiKey) {
 	return loadGoogleMaps(apiKey, ['geocoding']);
 }
 
+async function getGeocoder(apiKey) {
+	const { google, geocoding } = await ensureGoogleMapsLoaded(apiKey);
+	if (!geocoderInstance) {
+		const Geocoder = geocoding?.Geocoder || google.maps.Geocoder;
+		geocoderInstance = new Geocoder();
+	}
+	return { google, geocoder: geocoderInstance };
+}
+
+/**
+ * Geocode a typed place query into map coordinates.
+ * Uses the Maps Geocoder instead of Places Autocomplete so search does not
+ * require the browser key to have Places API access.
+ */
+export async function geocodePlaceQuery(query, apiKey) {
+	const trimmed = query?.trim();
+	if (!trimmed) return null;
+
+	const { geocoder } = await getGeocoder(apiKey);
+	const response = await geocoder.geocode({ address: trimmed });
+	const first = response.results?.[0];
+	if (!first?.geometry?.location) return null;
+
+	return {
+		lat: first.geometry.location.lat(),
+		lng: first.geometry.location.lng(),
+		viewport: first.geometry.viewport || null,
+		name: first.formatted_address || trimmed
+	};
+}
+
 /**
  * Google Plus Codes use only these characters: 23456789CFGHJMPQRVWX
  * Filter them out — they're not human-readable place names.
@@ -43,13 +74,8 @@ function findComponent(results, type) {
  */
 export async function reverseGeocode(lat, lng, apiKey) {
 	try {
-		const { google, geocoding } = await ensureGoogleMapsLoaded(apiKey);
-
-		if (!geocoderInstance) {
-			const Geocoder = geocoding?.Geocoder || google.maps.Geocoder;
-			geocoderInstance = new Geocoder();
-		}
-		const response = await geocoderInstance.geocode({ location: { lat, lng } });
+		const { geocoder } = await getGeocoder(apiKey);
+		const response = await geocoder.geocode({ location: { lat, lng } });
 
 		if (!response.results?.length) return null;
 
