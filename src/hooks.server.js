@@ -26,6 +26,7 @@ export async function handle({ event, resolve }) {
 	// Auth endpoints skip the auth check but still get CSRF protection
 	const isApiMutation = event.url.pathname.startsWith('/api') && event.request.method !== 'GET';
 	const isAuthEndpoint = event.url.pathname === '/api/auth' || event.url.pathname === '/api/auth/setup';
+	const isPublicApiMutation = event.url.pathname === '/api/geocode';
 
 	if (isApiMutation) {
 		// CSRF mitigation: applies to ALL API mutations including auth
@@ -39,7 +40,7 @@ export async function handle({ event, resolve }) {
 		}
 
 		// Auth endpoints handle their own authorization
-		if (!isAuthEndpoint && !event.locals.user) {
+		if (!isAuthEndpoint && !isPublicApiMutation && !event.locals.user) {
 			return new Response(JSON.stringify({ error: 'Unauthorized' }), {
 				status: 401,
 				headers: { 'Content-Type': 'application/json' }
