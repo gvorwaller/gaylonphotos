@@ -1,5 +1,5 @@
 import { json } from '@sveltejs/kit';
-import { GOOGLE_GEOCODING_KEY } from '$env/static/private';
+import { env } from '$env/dynamic/private';
 
 /** @type {import('./$types').RequestHandler} */
 export async function POST({ request }) {
@@ -20,7 +20,7 @@ export async function POST({ request }) {
 
 	const url = new URL('https://maps.googleapis.com/maps/api/geocode/json');
 	url.searchParams.set('address', query);
-	url.searchParams.set('key', GOOGLE_GEOCODING_KEY);
+	url.searchParams.set('key', env.GOOGLE_GEOCODING_KEY);
 
 	const response = await fetch(url, { signal: AbortSignal.timeout(10000) });
 	if (!response.ok) {
